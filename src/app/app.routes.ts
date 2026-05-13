@@ -55,7 +55,7 @@ export const routes: Routes = [
         loadComponent: () => import('./features/ayuda/ayuda.page').then(m => m.AyudaPage)
       },
       {
-        path: 'reportar',
+        path: 'reportes',
         loadComponent: () => import('./features/reportes/reportes.page').then(m => m.ReportesPage)
       },
       {
@@ -91,7 +91,17 @@ export const routes: Routes = [
     pathMatch: 'full'
   },
   {
+    path: 'ayuda',
+    redirectTo: '/tabs/ayuda',
+    pathMatch: 'full'
+  },
+  {
+    path: 'reportes',
+    redirectTo: '/tabs/reportes',
+    pathMatch: 'full'
+  },
+  {
     path: '**',
     redirectTo: '/tabs/home'
   }
-];
+];

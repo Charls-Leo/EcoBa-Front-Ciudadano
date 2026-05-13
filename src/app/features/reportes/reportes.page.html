@@ -7,27 +7,124 @@
           <polyline points="15 18 9 12 15 6"></polyline>
         </svg>
       </button>
+
       <div class="header-info">
         <div class="header-title">Reportes</div>
         <div class="header-subtitle">Registra un problema o incidencia</div>
       </div>
+
       <div class="header-spacer"></div>
     </div>
 
     <div class="scroll-content">
-      <div class="empty-state">
-        <div class="empty-icon-wrap">
-          <svg viewBox="0 0 24 24">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-            <line x1="12" y1="8" x2="12" y2="12"></line>
-            <line x1="12" y1="16" x2="12.01" y2="16"></line>
-          </svg>
+
+      <div class="report-card">
+
+        <div class="report-top">
+          <div class="report-icon-wrap">
+            <svg viewBox="0 0 24 24">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+          </div>
+
+          <div>
+            <h2>Nuevo reporte</h2>
+            <p>
+              Informa retrasos, contenedores desbordados, daños en la ruta o cualquier novedad del servicio.
+            </p>
+          </div>
         </div>
-        <div class="empty-title">Próximamente</div>
-        <div class="empty-text">
-          Aquí podrás reportar incidencias como retrasos, contenedores desbordados o problemas en tu recorrido.
-        </div>
+
+        <form class="report-form">
+
+          <label class="form-label">Nombre de contacto</label>
+          <div class="input-box">
+            <svg viewBox="0 0 24 24">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+            <input
+              type="text"
+              placeholder="Ej: Juan Pérez"
+              [(ngModel)]="reporte.nombre"
+              name="nombre"
+            />
+          </div>
+
+          <label class="form-label">Correo electrónico</label>
+          <div class="input-box">
+            <svg viewBox="0 0 24 24">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+              <polyline points="22,6 12,13 2,6"></polyline>
+            </svg>
+            <input
+              type="email"
+              placeholder="Ej: correo@ejemplo.com"
+              [(ngModel)]="reporte.correo"
+              name="correo"
+            />
+          </div>
+
+          <label class="form-label">Descripción del reporte</label>
+          <div class="textarea-box">
+            <textarea
+              rows="5"
+              placeholder="Describe aquí la novedad encontrada..."
+              [(ngModel)]="reporte.descripcion"
+              name="descripcion">
+            </textarea>
+          </div>
+
+          <label class="form-label">Imagen del reporte</label>
+
+          <button class="upload-box" type="button" (click)="fileInput.click()">
+            <svg viewBox="0 0 24 24">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <circle cx="8.5" cy="8.5" r="1.5"></circle>
+              <polyline points="21 15 16 10 5 21"></polyline>
+            </svg>
+
+            <span>Adjuntar imagen</span>
+            <small>Selecciona una foto desde tu dispositivo</small>
+          </button>
+
+          <input
+            type="file"
+            accept="image/*"
+            hidden
+            #fileInput
+            (change)="seleccionarImagen($event)"
+          />
+
+          <div class="image-preview-card" *ngIf="imagenPreview">
+            <div class="preview-header">
+              <div>
+                <span>Imagen seleccionada</span>
+                <small>{{ nombreImagen }}</small>
+              </div>
+
+              <button type="button" class="remove-img-btn" (click)="eliminarImagen()">
+                Quitar
+              </button>
+            </div>
+
+            <img [src]="imagenPreview" alt="Vista previa del reporte">
+          </div>
+
+          <button class="submit-btn" type="button" (click)="enviarReporte()">
+            Enviar reporte
+          </button>
+
+          <p class="helper-text">
+            Esta opción está preparada visualmente. El envío real se conectará posteriormente con el backend.
+          </p>
+
+        </form>
+
       </div>
+
     </div>
 
     <div class="bottom-nav">
