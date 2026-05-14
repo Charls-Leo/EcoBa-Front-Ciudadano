@@ -7,3 +7,4 @@ export * from './ruta.model';
 export * from './recorrido.model';
 export * from './vehiculo.model';
 export * from './location.model';
+export * from './reporte.model';

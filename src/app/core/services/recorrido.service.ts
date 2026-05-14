@@ -7,7 +7,7 @@ import { AuthService } from './auth.service';
 
 // =========================================================
 // Servicio de dominio: Recorridos del conductor
-// Solo maneja /recorridos_locales — sin lógica de UI
+// Solo maneja /recorridos — sin lógica de UI
 // =========================================================
 
 @Injectable({
@@ -15,12 +15,12 @@ import { AuthService } from './auth.service';
 })
 export class RecorridoService {
 
-  private readonly baseUrl = `${environment.API_BASE_URL}/recorridos_locales`;
+  private readonly baseUrl = `${environment.API_BASE_URL}/recorridos`;
 
   constructor(
     private http: HttpClient,
     private authService: AuthService
-  ) {}
+  ) { }
 
   /** Obtiene recorridos asignados al conductor logueado */
   getRecorridosConductor(): Observable<Recorrido[]> {
@@ -42,8 +42,8 @@ export class RecorridoService {
     return this.http.post(`${this.baseUrl}/${id}/activar`, {});
   }
 
-  /** Desactiva un recorrido en la base de datos */
-  desactivarRecorrido(id: string | number): Observable<any> {
-    return this.http.post(`${this.baseUrl}/${id}/desactivar`, {});
+  /** Finaliza un recorrido en la base de datos */
+  finalizarRecorrido(id: string | number): Observable<any> {
+    return this.http.post(`${this.baseUrl}/${id}/finalizar`, {});
   }
 }

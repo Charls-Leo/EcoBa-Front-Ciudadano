@@ -113,13 +113,9 @@
             <img [src]="imagenPreview" alt="Vista previa del reporte">
           </div>
 
-          <button class="submit-btn" type="button" (click)="enviarReporte()">
-            Enviar reporte
+          <button class="submit-btn" type="button" (click)="enviarReporte()" [disabled]="enviando">
+            {{ enviando ? 'Enviando...' : 'Enviar reporte' }}
           </button>
-
-          <p class="helper-text">
-            Esta opción está preparada visualmente. El envío real se conectará posteriormente con el backend.
-          </p>
 
         </form>
 

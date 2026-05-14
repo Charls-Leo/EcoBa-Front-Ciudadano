@@ -328,12 +328,9 @@ ion-content.section-content {
   transform: scale(0.98);
 }
 
-.helper-text {
-  margin: 12px 4px 0;
-  font-size: 12px;
-  line-height: 1.4;
-  color: var(--text-light);
-  text-align: center;
+.submit-btn:disabled {
+  opacity: 0.6;
+  pointer-events: none;
 }
 
 // Bottom nav

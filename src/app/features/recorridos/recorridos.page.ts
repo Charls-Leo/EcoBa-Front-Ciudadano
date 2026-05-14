@@ -42,7 +42,7 @@ export class RecorridosPage implements OnInit, OnDestroy {
     public trackingState: TrackingStateService,
     private vehiculoService: VehiculoService,
     private rutaService: RutaService
-  ) {}
+  ) { }
 
   ngOnInit(): void {
     this.cargarRecorridos();
@@ -60,7 +60,7 @@ export class RecorridosPage implements OnInit, OnDestroy {
         next: (data) => this.vehiculos = data || [],
         error: (err) => console.error('Error vehiculos', err)
       });
-      
+
     this.rutaService.getRutas()
       .pipe(takeUntil(this.destroy$))
       .subscribe({
@@ -135,7 +135,7 @@ export class RecorridosPage implements OnInit, OnDestroy {
     if (this.trackingState.recorridoActivo) {
       return;
     }
-    
+
     if (recId) {
       // 1. Solo activar en BD si NO está activo aún
       if (!recorrido.activo) {
@@ -151,40 +151,40 @@ export class RecorridosPage implements OnInit, OnDestroy {
 
       // 2. Inicializar el GPS y Tracking Socket (pasa también el ruta_id y la metadata)
       const rutaId = recorrido.ruta_id;
-      
+
       const v = this.vehiculos.find(ve => String(ve.id) === String(recorrido.vehiculo_id));
       const r = this.rutas.find(ru => String(ru.id) === String(recorrido.ruta_id));
-      
+
       const placa = v ? v.placa : '';
       const rutaNombre = r ? (r.nombre_ruta || r.nombre) : `RUTA ${rutaId}`;
-      
+
       this.trackingState.setRecorrido(recId, rutaId, placa, rutaNombre);
       this.trackingService.startTracking(String(recId));
-      
+
       // 3. Ir al mapa pasando el query param para la vista inicial
       this.router.navigate(['/tabs/mapa'], { queryParams: { ruta_id: rutaId } });
     } else {
       console.error('El recorrido no tiene un ID válido');
     }
   }
-  
+
   detenerRecorrido() {
     const recId = this.trackingState.recorridoActivo;
-    
+
     if (recId) {
       // 1. Desactivar en la base de datos
-      this.recorridoService.desactivarRecorrido(recId)
+      this.recorridoService.finalizarRecorrido(recId)
         .pipe(takeUntil(this.destroy$))
         .subscribe({
           next: () => {
             // Actualizar estado local si es necesario
             const recorrido = this.recorridos.find(r => String(r.id_recorrido || r.id) === String(recId));
             if (recorrido) recorrido.activo = false;
-            
+
             // Refrescar lista opcionalmente
             this.cargarRecorridos();
           },
-          error: (err) => console.error('Error al desactivar en BD', err)
+          error: (err) => console.error('Error al finalizar en BD', err)
         });
     }
 

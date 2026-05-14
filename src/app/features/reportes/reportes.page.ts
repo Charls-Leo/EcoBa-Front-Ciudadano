@@ -1,8 +1,11 @@
 import { Component } from '@angular/core';
 import { CommonModule, Location } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { IonicModule, AlertController } from '@ionic/angular';
+import { IonicModule, AlertController, LoadingController } from '@ionic/angular';
 import { Router } from '@angular/router';
+import { ReporteService } from '../../core/services/reporte.service';
+import { AuthService } from '../../core/services/auth.service';
+import { ReporteRequest } from '../../core/models';
 
 @Component({
   selector: 'app-reportes',
@@ -23,12 +26,25 @@ export class ReportesPage {
 
   imagenPreview: string | ArrayBuffer | null = null;
   nombreImagen = '';
+  enviando = false;
 
   constructor(
     private location: Location,
     private router: Router,
-    private alertController: AlertController
+    private alertController: AlertController,
+    private loadingController: LoadingController,
+    private reporteService: ReporteService,
+    private authService: AuthService
   ) {}
+
+  /** Pre-llenar nombre y correo si el conductor está logueado */
+  ionViewWillEnter(): void {
+    const user = this.authService.getUser();
+    if (user) {
+      this.reporte.nombre = `${user.nombre} ${user.apellido}`.trim();
+      this.reporte.correo = user.email;
+    }
+  }
 
   goBack(): void {
     this.location.back();
@@ -59,6 +75,14 @@ export class ReportesPage {
 
     const archivo = input.files[0];
 
+    // Validar tamaño (5 MB máximo)
+    const MAX_SIZE_MB = 5;
+    if (archivo.size > MAX_SIZE_MB * 1024 * 1024) {
+      this.mostrarAlerta('Imagen muy grande', `La imagen no puede superar ${MAX_SIZE_MB} MB.`);
+      input.value = '';
+      return;
+    }
+
     this.reporte.imagen = archivo;
     this.nombreImagen = archivo.name;
 
@@ -79,36 +103,87 @@ export class ReportesPage {
 
   async enviarReporte(): Promise<void> {
     if (!this.reporte.nombre.trim() || !this.reporte.correo.trim() || !this.reporte.descripcion.trim()) {
-      const alerta = await this.alertController.create({
-        header: 'Campos incompletos',
-        message: 'Por favor ingresa tu nombre, correo electrónico y la descripción del reporte.',
-        buttons: ['Aceptar']
-      });
-
-      await alerta.present();
+      await this.mostrarAlerta(
+        'Campos incompletos',
+        'Por favor ingresa tu nombre, correo electrónico y la descripción del reporte.'
+      );
       return;
     }
 
-    const alerta = await this.alertController.create({
-      header: 'Reporte preparado',
-      message: 'El reporte quedó registrado de forma visual. Más adelante se conectará con el backend para enviarlo al sistema.',
-      buttons: ['Aceptar']
+    // Mostrar loading
+    const loading = await this.loadingController.create({
+      message: 'Enviando reporte...',
+      spinner: 'crescent'
     });
+    await loading.present();
 
-    await alerta.present();
+    this.enviando = true;
 
-    this.limpiarFormulario();
+    try {
+      // Construir el payload para el backend
+      const user = this.authService.getUser();
+
+      const payload: ReporteRequest = {
+        nombre: this.reporte.nombre.trim(),
+        email: this.reporte.correo.trim(),
+        reporte: this.reporte.descripcion.trim(),
+        usuario_id: user?.id_usuario
+      };
+
+      // Convertir la imagen a base64 si existe
+      if (this.reporte.imagen && this.imagenPreview) {
+        payload.imagen_base64 = this.imagenPreview as string;
+      }
+
+      // Enviar al backend
+      this.reporteService.crearReporte(payload).subscribe({
+        next: async () => {
+          await loading.dismiss();
+          this.enviando = false;
+
+          await this.mostrarAlerta(
+            '¡Reporte enviado!',
+            'Tu reporte fue registrado exitosamente. Gracias por ayudar a mejorar el servicio.'
+          );
+
+          this.limpiarFormulario();
+        },
+        error: async (err) => {
+          await loading.dismiss();
+          this.enviando = false;
+          console.error('❌ Error al enviar reporte:', err);
+
+          const mensaje = err.error?.mensaje || 'Ocurrió un error inesperado. Intenta de nuevo más tarde.';
+          await this.mostrarAlerta('Error al enviar', mensaje);
+        }
+      });
+    } catch (err) {
+      await loading.dismiss();
+      this.enviando = false;
+      console.error('❌ Error inesperado:', err);
+      await this.mostrarAlerta('Error', 'Ocurrió un error inesperado.');
+    }
   }
 
   limpiarFormulario(): void {
+    const user = this.authService.getUser();
     this.reporte = {
-      nombre: '',
-      correo: '',
+      nombre: user ? `${user.nombre} ${user.apellido}`.trim() : '',
+      correo: user ? user.email : '',
       descripcion: '',
       imagen: null
     };
 
     this.imagenPreview = null;
     this.nombreImagen = '';
+  }
+
+  private async mostrarAlerta(header: string, message: string): Promise<void> {
+    const alerta = await this.alertController.create({
+      header,
+      message,
+      buttons: ['Aceptar']
+    });
+    await alerta.present();
   }
 }
