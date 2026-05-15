@@ -16,6 +16,77 @@
 
     <div class="map-container">
       <div id="map" style="width: 100%; height: 100%;"></div>
+
+      <!-- ═══ PANEL DE CONTROLES DEL RECORRIDO ═══ -->
+      <div class="map-controls-panel" *ngIf="trackingState.recorridoActivo">
+
+        <!-- Botón Tomar Foto -->
+        <button
+          class="map-action-btn camera-btn"
+          (click)="tomarFoto()"
+          [disabled]="isTakingPhoto"
+          type="button">
+          <div class="action-btn-icon">
+            <svg viewBox="0 0 24 24" *ngIf="!isTakingPhoto">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+              <circle cx="12" cy="13" r="4"></circle>
+            </svg>
+            <ion-spinner name="crescent" *ngIf="isTakingPhoto" class="btn-spinner"></ion-spinner>
+          </div>
+          <span class="action-btn-label">{{ isTakingPhoto ? 'Capturando...' : 'Tomar foto' }}</span>
+        </button>
+
+        <!-- Botón Finalizar Recorrido -->
+        <button
+          class="map-action-btn stop-btn"
+          (click)="confirmarFinalizarRecorrido()"
+          [disabled]="isFinishing"
+          type="button">
+          <div class="action-btn-icon">
+            <svg viewBox="0 0 24 24" *ngIf="!isFinishing">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            </svg>
+            <ion-spinner name="crescent" *ngIf="isFinishing" class="btn-spinner"></ion-spinner>
+          </div>
+          <span class="action-btn-label">{{ isFinishing ? 'Finalizando...' : 'Finalizar' }}</span>
+        </button>
+
+      </div>
+
+      <!-- ═══ INDICADOR DE ESTADO DEL RECORRIDO ═══ -->
+      <div class="tracking-indicator" *ngIf="trackingState.recorridoActivo">
+        <div class="tracking-pulse"></div>
+        <span class="tracking-text">Recorrido en curso</span>
+      </div>
+
+      <!-- ═══ PREVIEW DE FOTO TOMADA ═══ -->
+      <div class="photo-preview-overlay" *ngIf="photoPreview" (click)="cerrarPreview()">
+        <div class="photo-preview-card" (click)="$event.stopPropagation()">
+          <img [src]="photoPreview" alt="Foto capturada" class="preview-image" />
+          <div class="preview-actions">
+            <button class="preview-btn discard-btn" (click)="descartarFoto()" type="button">
+              <svg viewBox="0 0 24 24">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+              Descartar
+            </button>
+            <button class="preview-btn save-btn" (click)="enviarFoto()" [disabled]="isSendingPhoto" type="button">
+              <svg viewBox="0 0 24 24" *ngIf="!isSendingPhoto">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              <ion-spinner name="crescent" *ngIf="isSendingPhoto" class="btn-spinner-sm"></ion-spinner>
+              {{ isSendingPhoto ? 'Enviando...' : 'Enviar' }}
+            </button>
+          </div>
+          <div class="preview-status" *ngIf="photoStatusMsg">
+            <span [class.success]="photoStatusSuccess" [class.error]="!photoStatusSuccess">
+              {{ photoStatusMsg }}
+            </span>
+          </div>
+        </div>
+      </div>
+
     </div>
 
   </div>

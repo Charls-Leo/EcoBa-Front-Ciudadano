@@ -46,4 +46,50 @@ export class RecorridoService {
   finalizarRecorrido(id: string | number): Observable<any> {
     return this.http.post(`${this.baseUrl}/${id}/finalizar`, {});
   }
+
+  // ═══════════════════════════════════════════
+  // NUEVOS MÉTODOS — Posiciones e Imágenes
+  // ═══════════════════════════════════════════
+
+  /**
+   * Registra una posición GPS en un recorrido activo.
+   * Endpoint: POST /api/recorridos/{recorrido_id}/posiciones
+   * 
+   * Devuelve el objeto con el posicion_id necesario para subir imágenes.
+   */
+  registrarPosicion(recorridoId: string | number, lat: number, lon: number): Observable<any> {
+    const usuario = this.authService.getUser();
+    const perfilId = usuario?.id_usuario || environment.PERFIL_ID;
+
+    return this.http.post(`${this.baseUrl}/${recorridoId}/posiciones`, {
+      lat,
+      lon,
+      perfil_id: perfilId
+    });
+  }
+
+  /**
+   * Sube una imagen asociada a una posición específica del recorrido.
+   * Endpoint: POST /api/recorridos/posiciones/{posicion_id}/imagen
+   * 
+   * La imagen debe estar en Base64 (con o sin prefijo data:image/...).
+   * Solo funciona si el recorrido está en estado "En Curso".
+   */
+  subirImagenPosicion(posicionId: string, imagenBase64: string): Observable<any> {
+    return this.http.post(`${this.baseUrl}/posiciones/${posicionId}/imagen`, {
+      imagen_base64: imagenBase64
+    });
+  }
+
+  /**
+   * Obtiene la imagen de una posición específica.
+   * Endpoint: GET /api/recorridos/posiciones/{posicion_id}/imagen
+   * 
+   * Devuelve el binario de la imagen en formato WEBP.
+   */
+  obtenerImagenPosicion(posicionId: string): Observable<Blob> {
+    return this.http.get(`${this.baseUrl}/posiciones/${posicionId}/imagen`, {
+      responseType: 'blob'
+    });
+  }
 }
