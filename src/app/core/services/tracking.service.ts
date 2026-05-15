@@ -5,6 +5,7 @@ import { environment } from '../../../environments/environment';
 import { LocationService } from './location.service';
 import { WebSocketService } from './websocket.service';
 import { AuthService } from './auth.service';
+import { TrackingStateService } from './tracking-state.service';
 import { LocationData, TrackingPayload } from '../models';
 
 // =========================================================
@@ -39,6 +40,9 @@ export class TrackingService {
   /** ID del recorrido activo */
   private activeRecorridoId: string | null = null;
 
+  /** Suscripción a mensajes de WS */
+  private wsMsgSub: Subscription | null = null;
+
   /** Buffer de ubicaciones no enviadas (offline fallback) */
   private offlineBuffer: TrackingPayload[] = [];
   private readonly MAX_BUFFER_SIZE = 500;
@@ -50,8 +54,22 @@ export class TrackingService {
     private locationService: LocationService,
     private webSocketService: WebSocketService,
     private authService: AuthService,
-    private http: HttpClient
-  ) {}
+    private http: HttpClient,
+    private trackingState: TrackingStateService
+  ) {
+    this.listenToProgress();
+  }
+
+  private listenToProgress() {
+    this.wsMsgSub = this.webSocketService.messages$.subscribe(msg => {
+      if (msg.event === 'location:update' && msg.data) {
+        const data = msg.data as any;
+        if (String(data.recorrido_id) === String(this.activeRecorridoId) && data.porcentaje_progreso !== undefined) {
+           this.trackingState.setProgreso(data.porcentaje_progreso);
+        }
+      }
+    });
+  }
 
   // -----------------------------------------------------------
   // Control del tracking
@@ -107,7 +125,7 @@ export class TrackingService {
 
   /** Detener tracking completamente */
   async stopTracking(): Promise<void> {
-    // 1. Desuscribirse del stream GPS
+    // 1. Desuscribirse del stream GPS y WS
     if (this.locationSub) {
       this.locationSub.unsubscribe();
       this.locationSub = null;

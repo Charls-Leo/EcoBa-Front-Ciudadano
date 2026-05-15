@@ -1,7 +1,7 @@
 <ion-content [scrollY]="false" class="section-content">
   <div class="section-page">
 
-    <div class="section-header-bar">
+    <div class="section-header-bar" style="position: relative;">
       <button class="back-btn" (click)="goBack()" type="button">
         <svg viewBox="0 0 24 24">
           <polyline points="15 18 9 12 15 6"></polyline>
@@ -15,7 +15,32 @@
     </div>
 
     <div class="map-container">
-      <div id="map" style="width: 100%; height: 100%;"></div>
+      <div id="map" style="width: 100%; height: 100%; z-index: 1;"></div>
+      
+      <!-- Indicador de Estado (En Ruta / Fuera) -->
+      <div *ngIf="trackingState.recorridoActivo" class="status-indicator" [class.en-ruta]="isEnRuta" [class.fuera-ruta]="!isEnRuta">
+        <div class="status-dot"></div>
+        <span>{{ isEnRuta ? 'OK' : 'DESVÍO' }}</span>
+      </div>
+      
+      <!-- Botón para centrar ubicación -->
+      <button *ngIf="trackingState.recorridoActivo" class="center-location-btn" (click)="centerOnLocation()" type="button" aria-label="Centrar en mi ubicación" style="z-index: 9999;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <circle cx="12" cy="12" r="3"></circle>
+        </svg>
+      </button>
+      
+      <!-- Tarjeta flotante de progreso encima del mapa -->
+      <div *ngIf="trackingState.recorridoActivo" class="floating-progress-card">
+        <div class="progress-info">
+          <span class="progress-label">Progreso de la ruta</span>
+          <span class="progress-value">{{ (trackingState.progreso$ | async) || 0 | number:'1.0-0' }}%</span>
+        </div>
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill" [style.width.%]="(trackingState.progreso$ | async) || 0"></div>
+        </div>
+      </div>
     </div>
 
   </div>

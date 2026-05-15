@@ -48,21 +48,44 @@
         </div>
       </div>
 
-      <!-- Lista de rutas -->
-      <div class="rutas-list" *ngIf="!isLoading && !errorMsg && rutas.length > 0">
-        <div class="ruta-card" *ngFor="let ruta of rutas" (click)="verMapa(ruta.id)" style="cursor: pointer;">
-          <div class="ruta-color" [style.background]="ruta.color_hex || '#3aad6f'"></div>
-          <div class="ruta-info">
-            <div class="ruta-name">{{ ruta.nombre_ruta || ruta.nombre || 'Ruta sin nombre' }}</div>
-            <div class="ruta-id">ID: {{ ruta.id }}</div>
-          </div>
-          <div class="ruta-arrow">
-            <svg viewBox="0 0 24 24">
-              <polyline points="9 18 15 12 9 6"></polyline>
+      <!-- Pantalla de Bloqueo Óptima (Observable Async) -->
+      <ng-container *ngIf="(trackingState.recorridoId$ | async); else normalList">
+        <div class="locked-state-fullscreen">
+          <div class="lock-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
             </svg>
           </div>
+          <h2 class="lock-title">Rutas Bloqueadas</h2>
+          <p class="lock-desc">
+            Tienes un recorrido en curso en la <strong>{{ trackingState.nombreRuta || 'Ruta Actual' }}</strong>.<br><br>
+            Finaliza tu recolección para poder explorar otras rutas.
+          </p>
+          <button class="lock-btn" (click)="irAMiMapa()">
+            Ver mi ruta activa
+          </button>
         </div>
-      </div>
+      </ng-container>
+
+      <!-- Lista normal -->
+      <ng-template #normalList>
+        <!-- Lista de rutas -->
+        <div class="rutas-list" *ngIf="!isLoading && !errorMsg && rutas.length > 0">
+          <div class="ruta-card" *ngFor="let ruta of rutas" (click)="verMapa(ruta.id)" style="cursor: pointer;">
+            <div class="ruta-color" [style.background]="ruta.color_hex || '#3aad6f'"></div>
+            <div class="ruta-info">
+              <div class="ruta-name">{{ ruta.nombre_ruta || ruta.nombre || 'Ruta sin nombre' }}</div>
+              <div class="ruta-id">ID: {{ ruta.id }}</div>
+            </div>
+            <div class="ruta-arrow">
+              <svg viewBox="0 0 24 24">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </ng-template>
 
     </div>
 

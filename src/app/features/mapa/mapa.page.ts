@@ -25,6 +25,15 @@ export class MapaPage implements OnDestroy, OnInit {
   rutas: Ruta[] = [];
   selectedRutaId: string | number | null = null;
   private truckMarker: L.Marker | null = null;
+  public isEnRuta = false;
+  private officialRouteCoords: L.LatLng[] = [];
+
+  // Ruta de acercamiento (OSRM)
+  private approachRouteLayer: L.Polyline | null = null;
+  private lastLocation: {lat: number, lng: number} | null = null;
+  private isFetchingApproachRoute = false;
+  private startPointCoords: {lat: number, lng: number} | null = null;
+  private lastApproachUpdate = 0;
 
   constructor(
     private location: Location, 
@@ -40,8 +49,13 @@ export class MapaPage implements OnDestroy, OnInit {
     this.route.queryParams
       .pipe(takeUntil(this.destroy$))
       .subscribe(params => {
-        // Usar params, o si no hay, la ruta que esté siendo trackeada actualmente
-        this.selectedRutaId = params['ruta_id'] || this.trackingState.rutaActiva || null;
+        if (this.trackingState.recorridoActivo) {
+          // Si hay tracking activo, forzar a la ruta oficial del tracking
+          this.selectedRutaId = this.trackingState.rutaActiva || null;
+        } else {
+          // Si no, usar params, o si no hay, la ruta que esté siendo trackeada actualmente
+          this.selectedRutaId = params['ruta_id'] || this.trackingState.rutaActiva || null;
+        }
         this.cargarRutas();
       });
 
@@ -131,7 +145,95 @@ export class MapaPage implements OnDestroy, OnInit {
         } else {
           this.truckMarker.setLatLng(latlng);
         }
+
+        this.lastLocation = { lat: loc.latitude, lng: loc.longitude };
+        this.isEnRuta = this.checkIfOnRoute(latlng);
+        this.verificarRutaDeAcercamiento();
       });
+  }
+
+  // ═══════════════════════════════════════════
+  // Comprobar si está sobre la ruta oficial
+  // ═══════════════════════════════════════════
+  private checkIfOnRoute(currentPos: L.LatLng): boolean {
+    if (!this.officialRouteCoords || this.officialRouteCoords.length === 0 || !this.map) {
+      return false;
+    }
+
+    let minDistance = Infinity;
+    // Aproximación rápida calculando distancia a cada vértice de la ruta
+    for (const point of this.officialRouteCoords) {
+      const dist = this.map.distance(currentPos, point);
+      if (dist < minDistance) {
+        minDistance = dist;
+      }
+    }
+    
+    // Si está a menos de 80 metros de la calle oficial, está "En ruta"
+    return minDistance <= 80;
+  }
+
+  // ═══════════════════════════════════════════
+  // Ruta de Acercamiento Automática (OSRM)
+  // ═══════════════════════════════════════════
+  private async verificarRutaDeAcercamiento() {
+    if (!this.map || !this.lastLocation || !this.startPointCoords) return;
+
+    // Distancia directa desde el camión hasta el punto de inicio de la ruta oficial
+    const distToStart = this.map.distance(
+      L.latLng(this.lastLocation.lat, this.lastLocation.lng), 
+      L.latLng(this.startPointCoords.lat, this.startPointCoords.lng)
+    );
+
+    // Si está en la ruta oficial o muy cerca del punto de inicio
+    if (this.isEnRuta || distToStart < 100) {
+      if (this.approachRouteLayer) {
+        this.approachRouteLayer.remove();
+        this.approachRouteLayer = null;
+      }
+      return;
+    }
+
+    // Para no saturar OSRM y la red, calculamos la ruta cada 15 segundos máximo
+    const now = Date.now();
+    if (now - this.lastApproachUpdate < 15000 || this.isFetchingApproachRoute) return;
+
+    this.isFetchingApproachRoute = true;
+    this.lastApproachUpdate = now;
+
+    try {
+      const lon1 = this.lastLocation.lng;
+      const lat1 = this.lastLocation.lat;
+      const lon2 = this.startPointCoords.lng;
+      const lat2 = this.startPointCoords.lat;
+
+      const url = `https://router.project-osrm.org/route/v1/driving/${lon1},${lat1};${lon2},${lat2}?overview=full&geometries=geojson`;
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (data && data.routes && data.routes.length > 0) {
+        const coords = data.routes[0].geometry.coordinates; // [lon, lat]
+        const latlngs = coords.map((c: [number, number]) => L.latLng(c[1], c[0]));
+
+        if (this.approachRouteLayer) {
+          this.approachRouteLayer.remove();
+        }
+
+        // Dibujar ruta de acercamiento en color naranja punteado para diferenciarla
+        this.approachRouteLayer = L.polyline(latlngs, {
+          color: '#f59e0b', // Naranja/Ambar
+          weight: 6,
+          opacity: 0.8,
+          dashArray: '10, 10',
+          lineCap: 'round',
+          lineJoin: 'round'
+        }).addTo(this.map);
+      }
+    } catch (err) {
+      console.error('Error calculando ruta de acercamiento con OSRM:', err);
+    } finally {
+      this.isFetchingApproachRoute = false;
+    }
   }
 
   cargarRutas() {
@@ -150,6 +252,12 @@ export class MapaPage implements OnDestroy, OnInit {
     if (!this.map || !this.rutas.length) return;
     
     this.rutasLayer.clearLayers();
+    if (this.approachRouteLayer) {
+      this.approachRouteLayer.remove();
+      this.approachRouteLayer = null;
+    }
+    this.startPointCoords = null;
+    this.officialRouteCoords = [];
 
     const rutasADibujar = this.selectedRutaId 
         ? this.rutas.filter(r => String(r.id) === String(this.selectedRutaId))
@@ -184,6 +292,7 @@ export class MapaPage implements OnDestroy, OnInit {
 
         // L.latLng expects (lat, lng), GeoJSON has [lng, lat]
         const latlngs = allCoords.map((c: number[]) => L.latLng(c[1], c[0]));
+        this.officialRouteCoords = latlngs;
 
         // ═══ ESTILO PREMIUM ═══
 
@@ -225,6 +334,8 @@ export class MapaPage implements OnDestroy, OnInit {
 
         // ═══ MARCADORES DE INICIO Y FIN ═══
         if (latlngs.length > 0) {
+          this.startPointCoords = { lat: latlngs[0].lat, lng: latlngs[0].lng };
+
           // Marcador de INICIO (verde)
           const startIcon = L.divIcon({
             html: this.makeRoutePointHtml('start', isTracking),
@@ -253,6 +364,13 @@ export class MapaPage implements OnDestroy, OnInit {
     } else {
         // Fallback Buenaventura si no hay ruta seleccionada
         this.map.setView([ 3.8801, -77.03116 ], 14);
+    }
+
+    // Forzar re-cálculo de ruta de acercamiento porque las capas se limpiaron
+    if (this.lastLocation && this.startPointCoords) {
+      // Reiniciamos el timer para forzar a OSRM a calcular inmediatamente
+      this.lastApproachUpdate = 0; 
+      this.verificarRutaDeAcercamiento();
     }
   }
 
@@ -353,5 +471,15 @@ export class MapaPage implements OnDestroy, OnInit {
 
   goBack(): void {
     this.location.back();
+  }
+
+  centerOnLocation(): void {
+    if (this.map && this.lastLocation) {
+      this.map.setView(
+        [this.lastLocation.lat, this.lastLocation.lng], 
+        16, 
+        { animate: true, duration: 0.5 }
+      );
+    }
   }
 }

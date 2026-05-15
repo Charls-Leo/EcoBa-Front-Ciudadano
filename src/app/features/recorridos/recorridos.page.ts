@@ -90,6 +90,26 @@ export class RecorridosPage implements OnInit, OnDestroy {
         next: (data) => {
           this.recorridos = data || [];
           this.isLoading = false;
+
+          // Recuperar y reanudar el GPS si hay un recorrido en curso pero la app se reinició
+          setTimeout(() => {
+            const activoDB = this.recorridos.find((r: any) => r.estado === 'en_curso' || r.activo);
+            if (activoDB && !this.trackingState.recorridoActivo) {
+              const recId = activoDB.id_recorrido || activoDB.id || '';
+              const rutaId = activoDB.ruta_id || '';
+              
+              const v = this.vehiculos.find(ve => String(ve.id) === String(activoDB.vehiculo_id));
+              const r = this.rutas.find(ru => String(ru.id) === String(activoDB.ruta_id));
+              
+              const placa = v ? v.placa : '';
+              const rutaNombre = r ? (r.nombre_ruta || r.nombre) : `Ruta ${rutaId}`;
+              
+              if (recId) {
+                this.trackingState.setRecorrido(recId, rutaId, placa, rutaNombre);
+                this.trackingService.startTracking(String(recId));
+              }
+            }
+          }, 1000); // Esperar un momento para asegurar que las rutas/vehiculos cargaron
         },
         error: (err) => {
           console.error('Error cargando recorridos:', err);
@@ -171,25 +191,29 @@ export class RecorridosPage implements OnInit, OnDestroy {
   detenerRecorrido() {
     const recId = this.trackingState.recorridoActivo;
 
+    // 1. Detener GPS y limpiar estado global INMEDIATAMENTE para la UI
+    this.trackingService.stopTracking();
+    this.trackingState.clear();
+
     if (recId) {
-      // 1. Desactivar en la base de datos
+      // 2. Desactivar en la base de datos
       this.recorridoService.finalizarRecorrido(recId)
         .pipe(takeUntil(this.destroy$))
         .subscribe({
           next: () => {
-            // Actualizar estado local si es necesario
+            // Actualizar estado local
             const recorrido = this.recorridos.find(r => String(r.id_recorrido || r.id) === String(recId));
-            if (recorrido) recorrido.activo = false;
-
-            // Refrescar lista opcionalmente
-            this.cargarRecorridos();
+            if (recorrido) {
+              recorrido.activo = false;
+              (recorrido as any).estado = 'finalizado';
+            }
+            
+            // NO llamamos a this.cargarRecorridos() aquí. 
+            // Esto evita que una petición prematura al backend (donde quizás aún figure 'en_curso')
+            // dispare el "resucitador" del setTimeout y reavive la ruta cancelada.
           },
           error: (err) => console.error('Error al finalizar en BD', err)
         });
     }
-
-    // 2. Detener GPS y limpiar estado global
-    this.trackingService.stopTracking();
-    this.trackingState.clear();
   }
 }
