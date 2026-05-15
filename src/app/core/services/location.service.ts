@@ -26,7 +26,7 @@ export class LocationService {
 
   /** ID del watcher activo de Capacitor */
   private watchId: CallbackID | null = null;
-
+ 
   constructor(private ngZone: NgZone) {}
 
   // -----------------------------------------------------------

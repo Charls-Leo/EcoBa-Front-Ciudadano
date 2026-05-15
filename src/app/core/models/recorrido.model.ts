@@ -12,3 +12,32 @@ export interface Recorrido {
   creado_en?: string;
   actualizado_en?: string;
 }
+
+// ═══════════════════════════════════════════
+// Interfaces para Posiciones e Imágenes
+// ═══════════════════════════════════════════
+
+/** Respuesta al registrar una posición GPS */
+export interface PosicionResponse {
+  success?: boolean;
+  message?: string;
+  data?: {
+    id: string;
+    recorrido_id: string;
+    lat: number;
+    lon: number;
+    perfil_id: string;
+  };
+  id?: string;
+}
+
+/** Respuesta al subir una imagen a una posición */
+export interface ImagenPosicionResponse {
+  success: boolean;
+  message: string;
+  data?: {
+    posicion_id: string;
+    imagen: string;
+    url: string;
+  };
+}

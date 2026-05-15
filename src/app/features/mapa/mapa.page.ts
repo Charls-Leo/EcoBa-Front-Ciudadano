@@ -1,6 +1,6 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule, Location } from '@angular/common';
-import { IonicModule } from '@ionic/angular';
+import { IonicModule, AlertController } from '@ionic/angular';
 import { Router, ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -9,6 +9,9 @@ import { RutaService } from 'src/app/core/services/ruta.service';
 import { Ruta, GeoJSONGeometry } from 'src/app/core/models';
 import { LocationService } from 'src/app/core/services/location.service';
 import { TrackingStateService } from 'src/app/core/services/tracking-state.service';
+import { TrackingService } from 'src/app/core/services/tracking.service';
+import { RecorridoService } from 'src/app/core/services/recorrido.service';
+import { CameraService } from 'src/app/core/services/camera.service';
 
 @Component({
   selector: 'app-mapa',
@@ -35,13 +38,28 @@ export class MapaPage implements OnDestroy, OnInit {
   private startPointCoords: {lat: number, lng: number} | null = null;
   private lastApproachUpdate = 0;
 
+  // ═══ Estados de los controles del mapa ═══
+  isTakingPhoto = false;
+  isSendingPhoto = false;
+  isFinishing = false;
+
+  // ═══ Preview de foto ═══
+  photoPreview: string | null = null;
+  private photoBase64: string | null = null;
+  photoStatusMsg: string | null = null;
+  photoStatusSuccess = false;
+
   constructor(
-    private location: Location, 
+    private location: Location,
     private router: Router,
     private route: ActivatedRoute,
     private rutaService: RutaService,
     private locationService: LocationService,
-    public trackingState: TrackingStateService
+    public trackingState: TrackingStateService,
+    private trackingService: TrackingService,
+    private recorridoService: RecorridoService,
+    private cameraService: CameraService,
+    private alertCtrl: AlertController
   ) {}
 
   ngOnInit() {
@@ -81,14 +99,14 @@ export class MapaPage implements OnDestroy, OnInit {
       this.initMap();
       this.escucharUbicacionEnTiempoReal();
     }
-    
+
     // Forzar renderizado completo del mapa
     setTimeout(() => {
-      if(this.map) {
+      if (this.map) {
         this.map.invalidateSize();
         window.dispatchEvent(new Event('resize'));
         if (this.rutasLayer.getLayers().length > 0) {
-            this.map.fitBounds(this.rutasLayer.getBounds(), { padding: [40, 40] });
+          this.map.fitBounds(this.rutasLayer.getBounds(), { padding: [40, 40] });
         }
       }
     }, 300);
@@ -99,11 +117,165 @@ export class MapaPage implements OnDestroy, OnInit {
     this.destroy$.complete();
   }
 
+  // ═══════════════════════════════════════════
+  // CÁMARA — Tomar foto y enviar a la API
+  // ═══════════════════════════════════════════
+
+  async tomarFoto(): Promise<void> {
+    if (this.isTakingPhoto) return;
+    this.isTakingPhoto = true;
+    this.photoStatusMsg = null;
+
+    try {
+      const base64 = await this.cameraService.tomarFoto();
+
+      if (base64) {
+        // Guardar la foto para preview
+        this.photoBase64 = base64;
+        // Mostrar preview (asegurar que tenga prefijo para el <img>)
+        this.photoPreview = base64.startsWith('data:')
+          ? base64
+          : `data:image/jpeg;base64,${base64}`;
+      }
+    } catch (err) {
+      console.error('[MapaPage] Error al tomar foto:', err);
+      this.photoStatusMsg = 'Error al acceder a la cámara';
+      this.photoStatusSuccess = false;
+    } finally {
+      this.isTakingPhoto = false;
+    }
+  }
+
+  async enviarFoto(): Promise<void> {
+    if (!this.photoBase64 || this.isSendingPhoto) return;
+
+    const recorridoId = this.trackingState.recorridoActivo;
+    if (!recorridoId) {
+      this.photoStatusMsg = 'No hay recorrido activo';
+      this.photoStatusSuccess = false;
+      return;
+    }
+
+    this.isSendingPhoto = true;
+    this.photoStatusMsg = null;
+
+    try {
+      // 1. Obtener ubicación actual para registrar la posición
+      const ubicacion = await this.locationService.getCurrentPosition();
+
+      if (!ubicacion) {
+        this.photoStatusMsg = 'No se pudo obtener la ubicación GPS';
+        this.photoStatusSuccess = false;
+        this.isSendingPhoto = false;
+        return;
+      }
+
+      // 2. Registrar posición en la API del profe y obtener posicion_id
+      const posResponse = await this.recorridoService
+        .registrarPosicion(recorridoId, ubicacion.latitude, ubicacion.longitude)
+        .toPromise();
+
+      const posicionId = posResponse?.data?.id || posResponse?.id;
+
+      if (!posicionId) {
+        this.photoStatusMsg = 'No se obtuvo ID de posición';
+        this.photoStatusSuccess = false;
+        this.isSendingPhoto = false;
+        return;
+      }
+
+      // 3. Subir imagen asociada a esa posición
+      await this.recorridoService
+        .subirImagenPosicion(posicionId, this.photoBase64)
+        .toPromise();
+
+      this.photoStatusMsg = '¡Foto enviada correctamente!';
+      this.photoStatusSuccess = true;
+
+      // Cerrar preview después de 1.5s
+      setTimeout(() => {
+        this.cerrarPreview();
+      }, 1500);
+
+    } catch (err: any) {
+      console.error('[MapaPage] Error al enviar foto:', err);
+      this.photoStatusMsg = err?.error?.message || 'Error al enviar la foto';
+      this.photoStatusSuccess = false;
+    } finally {
+      this.isSendingPhoto = false;
+    }
+  }
+
+  descartarFoto(): void {
+    this.cerrarPreview();
+  }
+
+  cerrarPreview(): void {
+    this.photoPreview = null;
+    this.photoBase64 = null;
+    this.photoStatusMsg = null;
+  }
+
+  // ═══════════════════════════════════════════
+  // FINALIZAR RECORRIDO desde el mapa
+  // ═══════════════════════════════════════════
+
+  async confirmarFinalizarRecorrido(): Promise<void> {
+    const alert = await this.alertCtrl.create({
+      header: 'Finalizar recorrido',
+      message: '¿Estás seguro de que deseas finalizar el recorrido actual?',
+      buttons: [
+        {
+          text: 'Cancelar',
+          role: 'cancel'
+        },
+        {
+          text: 'Finalizar',
+          role: 'destructive',
+          handler: () => {
+            this.finalizarRecorrido();
+          }
+        }
+      ]
+    });
+    await alert.present();
+  }
+
+  private finalizarRecorrido(): void {
+    const recId = this.trackingState.recorridoActivo;
+    if (!recId || this.isFinishing) return;
+
+    this.isFinishing = true;
+
+    // 1. Finalizar en la BD (misma lógica que recorridos.page.ts)
+    this.recorridoService.finalizarRecorrido(recId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          console.log('[MapaPage] Recorrido finalizado en BD');
+        },
+        error: (err) => console.error('[MapaPage] Error al finalizar en BD', err)
+      });
+
+    // 2. Detener GPS y limpiar estado global
+    this.trackingService.stopTracking();
+    this.trackingState.clear();
+
+    this.isFinishing = false;
+
+    // 3. Navegar de vuelta a recorridos
+    this.router.navigate(['/tabs/recorridos']);
+  }
+
+  // ═══════════════════════════════════════════
+  // MAPA — Inicialización y dibujo
+  // ═══════════════════════════════════════════
+
   private initMap(): void {
     const mapElement = document.getElementById('map');
     if (!mapElement) return;
 
-    this.map = L.map('map', { attributionControl: false, zoomControl: false }).setView([ 3.8801, -77.03116 ], 14);
+    this.map = L.map('map', { attributionControl: false, zoomControl: false }).setView([3.8801, -77.03116], 14);
 
     // Mapa Estándar de Google Maps (Roadmap)
     L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
@@ -111,13 +283,13 @@ export class MapaPage implements OnDestroy, OnInit {
       subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
       attribution: '© Google Maps'
     }).addTo(this.map);
-    
+
     this.rutasLayer.addTo(this.map);
 
     setTimeout(() => {
-        if(this.map) {
-          this.map.invalidateSize();
-        }
+      if (this.map) {
+        this.map.invalidateSize();
+      }
     }, 500);
   }
 
@@ -126,9 +298,9 @@ export class MapaPage implements OnDestroy, OnInit {
       .pipe(takeUntil(this.destroy$))
       .subscribe(loc => {
         if (!this.map) return;
-        
+
         const latlng = L.latLng(loc.latitude, loc.longitude);
-        
+
         if (!this.truckMarker) {
           const placa = this.trackingState.vehiculoPlaca || undefined;
           const rutaNombre = this.trackingState.nombreRuta || undefined;
@@ -250,7 +422,7 @@ export class MapaPage implements OnDestroy, OnInit {
 
   dibujarRutas() {
     if (!this.map || !this.rutas.length) return;
-    
+
     this.rutasLayer.clearLayers();
     if (this.approachRouteLayer) {
       this.approachRouteLayer.remove();
@@ -259,9 +431,9 @@ export class MapaPage implements OnDestroy, OnInit {
     this.startPointCoords = null;
     this.officialRouteCoords = [];
 
-    const rutasADibujar = this.selectedRutaId 
-        ? this.rutas.filter(r => String(r.id) === String(this.selectedRutaId))
-        : [];
+    const rutasADibujar = this.selectedRutaId
+      ? this.rutas.filter(r => String(r.id) === String(this.selectedRutaId))
+      : [];
 
     const isTracking = !!this.trackingState.recorridoActivo;
 
@@ -271,23 +443,23 @@ export class MapaPage implements OnDestroy, OnInit {
         if (typeof ruta.shape === 'string') {
           try {
             shapeData = JSON.parse(ruta.shape) as GeoJSONGeometry;
-          } catch(e) {
+          } catch (e) {
             console.error('Error parsing route shape');
             return;
           }
         } else {
           shapeData = ruta.shape;
         }
-        
+
         let allCoords: number[][] = [];
         if (shapeData.type === 'MultiLineString' && shapeData.coordinates) {
-            (shapeData.coordinates as number[][][]).forEach((line: number[][]) => {
-              allCoords.push(...line);
-            });
+          (shapeData.coordinates as number[][][]).forEach((line: number[][]) => {
+            allCoords.push(...line);
+          });
         } else if (shapeData.coordinates) {
-            allCoords = shapeData.coordinates as number[][];
+          allCoords = shapeData.coordinates as number[][];
         } else {
-            return;
+          return;
         }
 
         // L.latLng expects (lat, lng), GeoJSON has [lng, lat]
@@ -327,7 +499,7 @@ export class MapaPage implements OnDestroy, OnInit {
           lineCap: 'round',
           lineJoin: 'round'
         });
-        
+
         this.rutasLayer.addLayer(glowLine);
         this.rutasLayer.addLayer(borderLine);
         this.rutasLayer.addLayer(mainLine);
@@ -344,7 +516,7 @@ export class MapaPage implements OnDestroy, OnInit {
             iconAnchor: [14, 14]
           });
           this.rutasLayer.addLayer(L.marker(latlngs[0], { icon: startIcon }));
-          
+
           // Marcador de FIN (rojo)
           if (latlngs.length > 1) {
             const endIcon = L.divIcon({
@@ -360,10 +532,10 @@ export class MapaPage implements OnDestroy, OnInit {
     });
 
     if (this.rutasLayer.getLayers().length > 0) {
-        this.map.fitBounds(this.rutasLayer.getBounds(), { padding: [50, 50] });
+      this.map.fitBounds(this.rutasLayer.getBounds(), { padding: [50, 50] });
     } else {
-        // Fallback Buenaventura si no hay ruta seleccionada
-        this.map.setView([ 3.8801, -77.03116 ], 14);
+      // Fallback Buenaventura si no hay ruta seleccionada
+      this.map.setView([3.8801, -77.03116], 14);
     }
 
     // Forzar re-cálculo de ruta de acercamiento porque las capas se limpiaron
@@ -380,7 +552,7 @@ export class MapaPage implements OnDestroy, OnInit {
   private makeRoutePointHtml(type: 'start' | 'end', isActive: boolean): string {
     const colors = {
       start: { bg: '#22c55e', border: '#16a34a', icon: '▶' },
-      end:   { bg: '#ef4444', border: '#dc2626', icon: '■' }
+      end: { bg: '#ef4444', border: '#dc2626', icon: '■' }
     };
     const c = colors[type];
 
