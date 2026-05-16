@@ -196,23 +196,31 @@ export class RecorridosPage implements OnInit, OnDestroy {
     this.trackingState.clear();
 
     if (recId) {
-      // 2. Desactivar en la base de datos
+      // 2. Actualización Optimista (Optimistic Update)
+      // Lo hacemos ANTES de llamar al backend para que el setTimeout de "cargarRecorridos" 
+      // no resucite el recorrido mientras la petición HTTP está en vuelo.
+      const recorrido = this.recorridos.find(r => String(r.id_recorrido || r.id) === String(recId));
+      if (recorrido) {
+        recorrido.activo = false;
+        (recorrido as any).estado = 'finalizado';
+      }
+
+      // 3. Desactivar en la base de datos
       this.recorridoService.finalizarRecorrido(recId)
         .pipe(takeUntil(this.destroy$))
         .subscribe({
           next: () => {
-            // Actualizar estado local
-            const recorrido = this.recorridos.find(r => String(r.id_recorrido || r.id) === String(recId));
-            if (recorrido) {
-              recorrido.activo = false;
-              (recorrido as any).estado = 'finalizado';
-            }
-            
-            // NO llamamos a this.cargarRecorridos() aquí. 
-            // Esto evita que una petición prematura al backend (donde quizás aún figure 'en_curso')
-            // dispare el "resucitador" del setTimeout y reavive la ruta cancelada.
+            // El estado ya se actualizó optimísticamente arriba.
+            console.log('Recorrido finalizado en backend exitosamente.');
           },
-          error: (err) => console.error('Error al finalizar en BD', err)
+          error: (err) => {
+            console.error('Error al finalizar en BD', err);
+            // Si falla, revertimos el estado optimista
+            if (recorrido) {
+              recorrido.activo = true;
+              (recorrido as any).estado = 'en_curso';
+            }
+          }
         });
     }
   }

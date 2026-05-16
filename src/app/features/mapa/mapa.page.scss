@@ -536,7 +536,7 @@ ion-content.section-content {
 // ═══════════════════════════════════
 .center-location-btn {
   position: absolute;
-  bottom: 120px;
+  top: 16px;
   right: 16px;
   width: 48px;
   height: 48px;
@@ -619,19 +619,239 @@ ion-content.section-content {
   70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
   100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 }
+// ═══════════════════════════════════════════
+// Bottom Sheet Custom (Infalible)
+// ═══════════════════════════════════════════
+
+.custom-bottom-sheet {
+  position: absolute;
+  bottom: calc(56px + env(safe-area-inset-bottom, 0px)); /* Siempre encima de los tabs */
+  left: 0;
+  right: 0;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(16px);
+  border-radius: 24px 24px 0 0;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  transform: translateY(calc(100% - 64px)); /* Altura del header visible */
+  z-index: 1000;
+  
+  &.expanded {
+    transform: translateY(0);
+  }
+}
+
+.sheet-header {
+  height: 64px;
+  padding: 0 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sheet-drag-handle {
+  width: 40px;
+  height: 4px;
+  background: #cbd5e1;
+  border-radius: 4px;
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.bp-row-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.toggle-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: #94a3b8;
+  
+  svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+}
+
+.sheet-content {
+  padding: 0 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+
+.custom-bottom-sheet.expanded .sheet-content {
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 0.3s ease 0.1s;
+}
+
+.bp-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  flex-shrink: 0;
+
+  span {
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .bp-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  &.ok {
+    background: rgba(34, 197, 94, 0.12);
+    span { color: #16a34a; }
+    .bp-status-dot {
+      background: #22c55e;
+      box-shadow: 0 0 6px #22c55e;
+    }
+  }
+
+  &.desvio {
+    background: rgba(239, 68, 68, 0.1);
+    span { color: #dc2626; }
+    .bp-status-dot {
+      background: #ef4444;
+      box-shadow: 0 0 6px #ef4444;
+      animation: pulseRed 1.5s infinite;
+    }
+  }
+}
+
+.bp-progress {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bp-progress-bar {
+  flex: 1;
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.bp-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #22c55e, #3aad6f);
+  border-radius: 10px;
+  transition: width 0.5s ease;
+}
+
+.bp-progress-pct {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--green-primary);
+  min-width: 36px;
+  text-align: right;
+}
+
+.bp-info-full {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.bp-ruta-name {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-dark);
+}
+
+.bp-separator {
+  color: var(--text-light);
+  font-size: 16px;
+}
+
+.bp-placa {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-mid);
+}
+
+.bp-actions-full {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bp-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 14px;
+  border: none;
+  cursor: pointer;
+  font-family: 'Nunito', sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  transition: transform 0.15s ease;
+
+  &:active { transform: scale(0.97); }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+}
+
+.bp-camera {
+  background: var(--blue-primary);
+  color: white;
+  box-shadow: 0 4px 14px rgba(74, 144, 255, 0.25);
+}
+
+.bp-stop {
+  background: var(--red-primary);
+  color: white;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.25);
+}
 
 @media (max-width: 480px) {
   .section-header-bar {
     padding: 16px 16px 14px;
-  }
-
-  .map-controls-panel {
-    bottom: 16px;
-    right: 12px;
-  }
-
-  .map-action-btn {
-    padding: 9px 14px;
   }
 
   .photo-preview-card {
@@ -640,5 +860,71 @@ ion-content.section-content {
 
   .preview-image {
     height: 190px;
+  }
+
+  .bottom-panel {
+    bottom: 8px;
+    left: 8px;
+    right: 8px;
+    padding: 10px 12px;
+  }
+}
+
+// ═══════════════════════════════════════════
+// Estilos de la Alerta de Confirmación (Global / ng-deep)
+// ═══════════════════════════════════════════
+
+::ng-deep .eco-custom-alert {
+  --background: rgba(255, 255, 255, 0.95);
+  --backdrop-opacity: 0.6;
+  
+  .alert-wrapper {
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+  }
+
+  .alert-head {
+    padding-top: 24px;
+    h2 {
+      font-family: 'Nunito', sans-serif;
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--text-dark, #1e293b);
+    }
+  }
+
+  .alert-message {
+    font-family: 'Nunito', sans-serif;
+    font-size: 15px;
+    color: var(--text-mid, #64748b);
+    padding-bottom: 24px;
+  }
+
+  .alert-button-group {
+    padding: 8px;
+    display: flex;
+    gap: 10px;
+    
+    button {
+      border-radius: 12px;
+      font-family: 'Nunito', sans-serif;
+      font-weight: 800;
+      font-size: 15px;
+      flex: 1;
+      margin: 0;
+    }
+    
+    .eco-btn-cancel {
+      color: var(--text-mid, #64748b);
+      background: #f1f5f9;
+    }
+    
+    .eco-btn-confirm {
+      color: white;
+      background: var(--red-primary, #ef4444);
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+    }
   }
 }

@@ -42,6 +42,11 @@ export class MapaPage implements OnDestroy, OnInit {
   isTakingPhoto = false;
   isSendingPhoto = false;
   isFinishing = false;
+  isPanelExpanded = false;
+
+  togglePanel() {
+    this.isPanelExpanded = !this.isPanelExpanded;
+  }
 
   // ═══ Preview de foto ═══
   photoPreview: string | null = null;
@@ -160,19 +165,35 @@ export class MapaPage implements OnDestroy, OnInit {
     this.photoStatusMsg = null;
 
     try {
-      // 1. Obtener ubicación actual para registrar la posición
-      const ubicacion = await this.locationService.getCurrentPosition();
+      // 1. Priorizar la última ubicación del tracking activo (evita esperar 10s de GPS timeout)
+      let lat: number | null = null;
+      let lon: number | null = null;
 
-      if (!ubicacion) {
+      if (this.lastLocation) {
+        // Tracking activo: usamos la última posición conocida directamente
+        lat = this.lastLocation.lat;
+        lon = this.lastLocation.lng;
+      } else {
+        // No hay tracking activo: intentar GPS en tiempo real (con timeout corto)
+        try {
+          const ubicacion = await this.locationService.getCurrentPosition();
+          if (ubicacion) {
+            lat = ubicacion.latitude;
+            lon = ubicacion.longitude;
+          }
+        } catch { /* silencioso */ }
+      }
+
+      if (lat === null || lon === null) {
         this.photoStatusMsg = 'No se pudo obtener la ubicación GPS';
         this.photoStatusSuccess = false;
         this.isSendingPhoto = false;
         return;
       }
 
-      // 2. Registrar posición en la API del profe y obtener posicion_id
+      // 2. Registrar posición y obtener posicion_id
       const posResponse = await this.recorridoService
-        .registrarPosicion(recorridoId, ubicacion.latitude, ubicacion.longitude)
+        .registrarPosicion(recorridoId, lat, lon)
         .toPromise();
 
       const posicionId = posResponse?.data?.id || posResponse?.id;
@@ -224,14 +245,17 @@ export class MapaPage implements OnDestroy, OnInit {
     const alert = await this.alertCtrl.create({
       header: 'Finalizar recorrido',
       message: '¿Estás seguro de que deseas finalizar el recorrido actual?',
+      cssClass: 'eco-custom-alert',
       buttons: [
         {
           text: 'Cancelar',
-          role: 'cancel'
+          role: 'cancel',
+          cssClass: 'eco-btn-cancel'
         },
         {
           text: 'Finalizar',
           role: 'destructive',
+          cssClass: 'eco-btn-confirm',
           handler: () => {
             this.finalizarRecorrido();
           }
@@ -247,24 +271,27 @@ export class MapaPage implements OnDestroy, OnInit {
 
     this.isFinishing = true;
 
-    // 1. Finalizar en la BD (misma lógica que recorridos.page.ts)
+    // 1. Finalizar en la BD
     this.recorridoService.finalizarRecorrido(recId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: () => {
           console.log('[MapaPage] Recorrido finalizado en BD');
+          
+          // 2. Detener GPS y limpiar estado global
+          this.trackingService.stopTracking();
+          this.trackingState.clear();
+
+          this.isFinishing = false;
+
+          // 3. Navegar de vuelta a recorridos
+          this.router.navigate(['/tabs/recorridos']);
         },
-        error: (err) => console.error('[MapaPage] Error al finalizar en BD', err)
+        error: (err) => {
+          console.error('[MapaPage] Error al finalizar en BD', err);
+          this.isFinishing = false;
+        }
       });
-
-    // 2. Detener GPS y limpiar estado global
-    this.trackingService.stopTracking();
-    this.trackingState.clear();
-
-    this.isFinishing = false;
-
-    // 3. Navegar de vuelta a recorridos
-    this.router.navigate(['/tabs/recorridos']);
   }
 
   // ═══════════════════════════════════════════
@@ -306,7 +333,7 @@ export class MapaPage implements OnDestroy, OnInit {
           const rutaNombre = this.trackingState.nombreRuta || undefined;
 
           const truckIcon = L.divIcon({
-            html: this.makeTruckPinHtml(placa, rutaNombre),
+            html: this.makeTruckPinHtml(placa, rutaNombre, loc.heading || 0),
             className: 'truck-marker-wrapper',
             iconSize: [52, 52],
             iconAnchor: [26, 26]
@@ -315,7 +342,17 @@ export class MapaPage implements OnDestroy, OnInit {
           // Si es la primera vez que recibimos la ubicación, centramos el mapa en el conductor
           this.map.setView(latlng, 16);
         } else {
+          // Actualizar posición y rotación
+          const placa = this.trackingState.vehiculoPlaca || undefined;
+          const rutaNombre = this.trackingState.nombreRuta || undefined;
+          
           this.truckMarker.setLatLng(latlng);
+          this.truckMarker.setIcon(L.divIcon({
+            html: this.makeTruckPinHtml(placa, rutaNombre, loc.heading || 0),
+            className: 'truck-marker-wrapper',
+            iconSize: [52, 52],
+            iconAnchor: [26, 26]
+          }));
         }
 
         this.lastLocation = { lat: loc.latitude, lng: loc.longitude };
@@ -349,7 +386,13 @@ export class MapaPage implements OnDestroy, OnInit {
   // Ruta de Acercamiento Automática (OSRM)
   // ═══════════════════════════════════════════
   private async verificarRutaDeAcercamiento() {
-    if (!this.map || !this.lastLocation || !this.startPointCoords) return;
+    if (!this.map || !this.lastLocation || !this.startPointCoords || !this.trackingState.recorridoActivo) {
+      if (this.approachRouteLayer) {
+        this.approachRouteLayer.remove();
+        this.approachRouteLayer = null;
+      }
+      return;
+    }
 
     // Distancia directa desde el camión hasta el punto de inicio de la ruta oficial
     const distToStart = this.map.distance(
@@ -539,7 +582,7 @@ export class MapaPage implements OnDestroy, OnInit {
     }
 
     // Forzar re-cálculo de ruta de acercamiento porque las capas se limpiaron
-    if (this.lastLocation && this.startPointCoords) {
+    if (this.lastLocation && this.startPointCoords && this.trackingState.recorridoActivo) {
       // Reiniciamos el timer para forzar a OSRM a calcular inmediatamente
       this.lastApproachUpdate = 0; 
       this.verificarRutaDeAcercamiento();
@@ -584,7 +627,9 @@ export class MapaPage implements OnDestroy, OnInit {
   // ═══════════════════════════════════════════
   // Marcador del camión (conductor en movimiento)
   // ═══════════════════════════════════════════
-  private makeTruckPinHtml(placa?: string, rutaNombre?: string): string {
+  private makeTruckPinHtml(placa?: string, rutaNombre?: string, heading?: number): string {
+    const rotacion = heading ? `rotate(${heading}deg)` : 'rotate(0deg)';
+    
     const tooltipHtml = (placa || rutaNombre) ? `
       <div style="
         position: absolute;
@@ -610,23 +655,31 @@ export class MapaPage implements OnDestroy, OnInit {
 
     return `
       ${tooltipHtml}
-      <!-- Pulso GPS exterior -->
-      <div class="gps-pulse-ring"></div>
-      <!-- Círculo principal -->
+      <!-- Contenedor rotatorio del camión -->
       <div style="
         position: absolute; top: 50%; left: 50%;
-        transform: translate(-50%, -50%);
+        transform: translate(-50%, -50%) ${rotacion};
         width: 40px; height: 40px;
-        background: linear-gradient(135deg, #4A90FF 0%, #357ABD 100%);
-        border: 3px solid #ffffff;
-        border-radius: 50%;
-        display: flex; align-items: center; justify-content: center;
-        box-shadow: 0 4px 14px rgba(74, 144, 255, 0.5), 0 2px 4px rgba(0,0,0,0.2);
-        z-index: 10;
+        transition: transform 0.3s ease-out;
       ">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="white">
-          <path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
-        </svg>
+        <!-- Pulso GPS exterior -->
+        <div class="gps-pulse-ring" style="position: absolute; top: -6px; left: -6px; right: -6px; bottom: -6px; border-radius: 50%;"></div>
+        
+        <!-- Círculo principal -->
+        <div style="
+          position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+          background: linear-gradient(135deg, #4A90FF 0%, #357ABD 100%);
+          border: 3px solid #ffffff;
+          border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          box-shadow: 0 4px 14px rgba(74, 144, 255, 0.5), 0 2px 4px rgba(0,0,0,0.2);
+          z-index: 10;
+        ">
+          <!-- Icono de flecha de navegación (en lugar del camión estático) -->
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="white" style="transform: rotate(-45deg); margin-top: 2px; margin-right: 2px;">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+          </svg>
+        </div>
       </div>
       <!-- Punto de dirección -->
       <div style="
