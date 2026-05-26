@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { authGuard, noAuthGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
   {
@@ -8,26 +9,31 @@ export const routes: Routes = [
   },
   {
     path: 'splash',
+    canActivate: [noAuthGuard],
     loadComponent: () =>
       import('./features/inicio/splash/splash.page').then(m => m.SplashPage)
   },
   {
     path: 'onboarding',
+    canActivate: [noAuthGuard],
     loadComponent: () =>
       import('./features/inicio/onboarding/onboarding.page').then(m => m.OnboardingPage)
   },
   {
     path: 'login',
+    canActivate: [noAuthGuard],
     loadComponent: () =>
       import('./auth/login/login.page').then((m) => m.LoginPage),
   },
   {
     path: 'registro',
+    canActivate: [noAuthGuard],
     loadComponent: () =>
       import('./auth/registro/registro.page').then((m) => m.RegistroPage),
   },
   {
     path: 'tabs',
+    canActivate: [authGuard],
     loadComponent: () => import('./layout/tabs/tabs.page').then((m) => m.TabsPage),
     children: [
       {

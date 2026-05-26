@@ -6,6 +6,8 @@ import { LocationService } from './location.service';
 import { WebSocketService } from './websocket.service';
 import { AuthService } from './auth.service';
 import { TrackingStateService } from './tracking-state.service';
+import { ConnectivityService } from './connectivity.service';
+import { OfflineQueueService } from './offline-queue.service';
 import { LocationData, TrackingPayload } from '../models';
 
 // =========================================================
@@ -55,7 +57,9 @@ export class TrackingService {
     private webSocketService: WebSocketService,
     private authService: AuthService,
     private http: HttpClient,
-    private trackingState: TrackingStateService
+    private trackingState: TrackingStateService,
+    private connectivity: ConnectivityService,
+    private offlineQueue: OfflineQueueService
   ) {
     this.listenToProgress();
   }
@@ -87,21 +91,25 @@ export class TrackingService {
     this.activeRecorridoId = recorridoId;
 
     // 1. Conectar WebSocket PRIMERO y esperar a que esté listo
-    const token = this.authService.getToken();
-    if (token) {
-      this.webSocketService.connect(token);
-      try {
-        // Esperar hasta 3 segundos a que el WebSocket conecte
-        await firstValueFrom(
-          this.webSocketService.connectionStatus$.pipe(
-            filter(status => status === 'connected'),
-            timeout(3000)
-          )
-        );
-        console.log('[TrackingService] WebSocket conectado — listo para enviar');
-      } catch {
-        console.warn('[TrackingService] WebSocket no conectó en 3s — se usará buffer offline');
+    if (this.connectivity.isOnline) {
+      const token = this.authService.getToken();
+      if (token) {
+        this.webSocketService.connect(token);
+        try {
+          // Esperar hasta 3 segundos a que el WebSocket conecte
+          await firstValueFrom(
+            this.webSocketService.connectionStatus$.pipe(
+              filter(status => status === 'connected'),
+              timeout(3000)
+            )
+          );
+          console.log('[TrackingService] WebSocket conectado — listo para enviar');
+        } catch {
+          console.warn('[TrackingService] WebSocket no conectó en 3s — se usará buffer offline');
+        }
       }
+    } else {
+      console.warn('[TrackingService] ⚠️ Sin conexión — ubicaciones se guardarán localmente');
     }
 
     // 2. Iniciar captura GPS
@@ -192,19 +200,31 @@ export class TrackingService {
       }
     };
 
-    // Intentar enviar por WebSocket
-    const sent = this.webSocketService.send('conductor:location', payload);
+    // ═══ ESTRATEGIA DE ENVÍO CON FALLBACK OFFLINE ═══
+    if (this.connectivity.isOnline) {
+      // Intentar enviar por WebSocket
+      const sent = this.webSocketService.send('conductor:location', payload);
 
-    if (sent) {
-      this.sentCountSubject.next(this.sentCountSubject.value + 1);
+      if (sent) {
+        this.sentCountSubject.next(this.sentCountSubject.value + 1);
+      } else {
+        // WebSocket no disponible — guardar en buffer offline
+        this.addToOfflineBuffer(payload);
+      }
     } else {
-      // WebSocket no disponible — guardar en buffer offline
-      this.addToOfflineBuffer(payload);
+      // Sin conexión — guardar en la cola persistente (localStorage)
+      this.offlineQueue.enqueueLocation({
+        recorrido_id: this.activeRecorridoId || '',
+        lat: location.latitude,
+        lon: location.longitude,
+        perfil_id: conductorId,
+        timestamp: location.timestamp
+      });
     }
   }
 
   // -----------------------------------------------------------
-  // Buffer offline (fallback)
+  // Buffer offline (fallback en memoria)
   // -----------------------------------------------------------
 
   /** Agregar payload al buffer cuando no hay conexión */
@@ -239,3 +259,4 @@ export class TrackingService {
     }
   }
 }
+

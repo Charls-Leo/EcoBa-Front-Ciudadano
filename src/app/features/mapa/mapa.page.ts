@@ -12,6 +12,10 @@ import { TrackingStateService } from 'src/app/core/services/tracking-state.servi
 import { TrackingService } from 'src/app/core/services/tracking.service';
 import { RecorridoService } from 'src/app/core/services/recorrido.service';
 import { CameraService } from 'src/app/core/services/camera.service';
+import { ConnectivityService } from 'src/app/core/services/connectivity.service';
+import { OfflineQueueService } from 'src/app/core/services/offline-queue.service';
+import { AuthService } from 'src/app/core/services/auth.service';
+import { environment } from 'src/environments/environment';
 
 @Component({
   selector: 'app-mapa',
@@ -64,7 +68,10 @@ export class MapaPage implements OnDestroy, OnInit {
     private trackingService: TrackingService,
     private recorridoService: RecorridoService,
     private cameraService: CameraService,
-    private alertCtrl: AlertController
+    private alertCtrl: AlertController,
+    public connectivity: ConnectivityService,
+    public offlineQueue: OfflineQueueService,
+    private authService: AuthService
   ) {}
 
   ngOnInit() {
@@ -191,12 +198,42 @@ export class MapaPage implements OnDestroy, OnInit {
         return;
       }
 
+      // FALLBACK MODO OFFLINE: Si no hay conexión, se guarda la foto localmente en SQLite
+      if (!this.connectivity.isOnline) {
+        const usuario = this.authService.getUser();
+        const perfilId = usuario?.id_usuario || environment.PERFIL_ID;
+
+        await this.offlineQueue.enqueuePhoto({
+          recorrido_id: String(recorridoId),
+          lat,
+          lon,
+          perfil_id: String(perfilId),
+          imagen_base64: this.photoBase64,
+          timestamp: Date.now()
+        });
+
+        this.photoStatusMsg = '¡Foto guardada localmente (Modo Offline)! 💾';
+        this.photoStatusSuccess = true;
+
+        setTimeout(() => {
+          this.cerrarPreview();
+        }, 1500);
+        return;
+      }
+
       // 2. Registrar posición y obtener posicion_id
       const posResponse = await this.recorridoService
         .registrarPosicion(recorridoId, lat, lon)
         .toPromise();
 
-      const posicionId = posResponse?.data?.id || posResponse?.id;
+      const posicionId = posResponse?.data?.id_posiciones ||
+                         posResponse?.id_posiciones ||
+                         posResponse?.data?.id_posicion || 
+                         posResponse?.id_posicion || 
+                         posResponse?.data?.id || 
+                         posResponse?.id || 
+                         posResponse?.data?.posicion_id || 
+                         posResponse?.posicion_id;
 
       if (!posicionId) {
         this.photoStatusMsg = 'No se obtuvo ID de posición';
@@ -220,7 +257,9 @@ export class MapaPage implements OnDestroy, OnInit {
 
     } catch (err: any) {
       console.error('[MapaPage] Error al enviar foto:', err);
-      this.photoStatusMsg = err?.error?.message || 'Error al enviar la foto';
+      const detailedMsg = err?.error?.message || err?.message || 'Error desconocido';
+      const detailJson = err?.error ? JSON.stringify(err.error) : JSON.stringify(err);
+      this.photoStatusMsg = `Error: ${detailedMsg} | JSON: ${detailJson}`;
       this.photoStatusSuccess = false;
     } finally {
       this.isSendingPhoto = false;

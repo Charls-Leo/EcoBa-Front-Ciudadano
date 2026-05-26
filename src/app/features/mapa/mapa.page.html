@@ -25,6 +25,18 @@
         </svg>
       </button>
 
+      <!-- Indicador de conectividad flotante -->
+      <div *ngIf="trackingState.recorridoActivo" class="connectivity-badge" [class.offline]="!connectivity.isOnline" style="position: absolute; top: 16px; left: 16px; z-index: 1000; display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 20px; font-size: 11px; font-weight: 800; font-family: 'Nunito', sans-serif; box-shadow: 0 4px 10px rgba(0,0,0,0.15); transition: all 0.3s ease;">
+        <div class="status-dot"></div>
+        <span>{{ connectivity.isOnline ? 'CONECTADO' : 'MODO OFFLINE' }}</span>
+        <span *ngIf="!connectivity.isOnline && (offlineQueue.pendingLocations$ | async) !== 0" style="background: rgba(255,255,255,0.25); padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 4px; font-weight: 900;">
+          {{ (offlineQueue.pendingLocations$ | async) }}📍
+        </span>
+        <span *ngIf="!connectivity.isOnline && (offlineQueue.pendingPhotos$ | async) !== 0" style="background: rgba(255,255,255,0.25); padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 4px; font-weight: 900;">
+          {{ (offlineQueue.pendingPhotos$ | async) }}📸
+        </span>
+      </div>
+
     </div>
   </div>
 </ion-content>
