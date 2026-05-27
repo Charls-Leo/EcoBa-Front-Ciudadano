@@ -6,6 +6,7 @@ import { environment } from '../../../environments/environment';
 // =========================================================
 // WebSocketService — Capa de comunicación en tiempo real
 // Implementado con Socket.IO para compatibilidad con backend
+// + Auto-reconexión con token fresco desde localStorage
 // =========================================================
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
@@ -34,6 +35,11 @@ export class WebSocketService {
   /** URL del servidor Socket.IO (remueve el /api del endpoint) */
   private readonly serverUrl = environment.API_BASE_URL.replace(/\/api$/, '');
 
+  /** Control de reconexión manual */
+  private reconnectAttempts = 0;
+  private readonly MAX_RECONNECT_ATTEMPTS = 10;
+  private reconnectTimer: any = null;
+
   // -----------------------------------------------------------
   // Conexión
   // -----------------------------------------------------------
@@ -44,33 +50,52 @@ export class WebSocketService {
       return; // Ya conectado
     }
 
-    this.statusSubject.next('connecting');
+    // Limpiar socket previo si existe pero no está conectado
+    if (this.socket) {
+      this.socket.removeAllListeners();
+      this.socket.disconnect();
+      this.socket = null;
+    }
 
+    this.statusSubject.next('connecting');
+    this.reconnectAttempts = 0;
+
+    this.createSocket(token);
+  }
+
+  /** Crea el socket y configura los listeners */
+  private createSocket(token: string): void {
     try {
-      // Se conecta enviando el token en el objeto auth (como espera el backend)
       this.socket = io(this.serverUrl, {
-        auth: {
-          token: token
-        },
-        transports: ['websocket', 'polling']
+        auth: { token },
+        transports: ['websocket', 'polling'],
+        reconnection: false // Desactivamos la reconexión automática de Socket.IO
+                            // porque necesitamos refrescar el token en cada intento
       });
 
       this.socket.on('connect', () => {
         this.statusSubject.next('connected');
-        console.log('[WebSocketService] Conectado al servidor Socket.IO');
+        this.reconnectAttempts = 0; // Reset en conexión exitosa
+        console.log('[WebSocketService] ✅ Conectado al servidor Socket.IO');
       });
 
       this.socket.on('connect_error', (err) => {
+        console.error('[WebSocketService] ❌ Error de conexión:', err.message);
         this.statusSubject.next('error');
-        console.error('[WebSocketService] Error de conexión Socket.IO:', err.message);
+        this.attemptReconnect();
       });
 
       this.socket.on('disconnect', (reason) => {
         this.statusSubject.next('disconnected');
         console.log('[WebSocketService] Desconectado:', reason);
+
+        // Si el servidor nos desconectó (ej: token expiró), intentar reconectar
+        if (reason === 'io server disconnect' || reason === 'transport close') {
+          this.attemptReconnect();
+        }
       });
 
-      // Escuchar eventos dinámicos si se requiere
+      // Escuchar eventos dinámicos
       this.socket.onAny((event, ...args) => {
         this.messageSubject.next({ event, data: args[0] });
       });
@@ -79,6 +104,46 @@ export class WebSocketService {
       this.statusSubject.next('error');
       console.error('[WebSocketService] Error al inicializar Socket.IO:', err);
     }
+  }
+
+  /**
+   * Reconexión inteligente con token fresco.
+   * Lee el token MÁS RECIENTE del localStorage (no el que se pasó en connect()),
+   * lo que soluciona el caso donde el usuario hizo login de nuevo y tiene un token nuevo
+   * pero el WebSocket seguía intentando con el viejo.
+   */
+  private attemptReconnect(): void {
+    if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
+      console.warn('[WebSocketService] ⛔ Máximo de intentos de reconexión alcanzado');
+      return;
+    }
+
+    // Leer token fresco desde localStorage
+    const freshToken = localStorage.getItem('ecobahia_driver_token');
+    if (!freshToken) {
+      console.warn('[WebSocketService] No hay token en localStorage — no se puede reconectar');
+      return;
+    }
+
+    this.reconnectAttempts++;
+    // Backoff exponencial: 1s, 2s, 4s, 8s... máximo 30s
+    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts - 1), 30000);
+
+    console.log(`[WebSocketService] 🔄 Reconectando en ${delay / 1000}s (intento ${this.reconnectAttempts}/${this.MAX_RECONNECT_ATTEMPTS})...`);
+
+    clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = setTimeout(() => {
+      // Limpiar socket viejo
+      if (this.socket) {
+        this.socket.removeAllListeners();
+        this.socket.disconnect();
+        this.socket = null;
+      }
+
+      // Crear nueva conexión con token fresco
+      this.statusSubject.next('connecting');
+      this.createSocket(freshToken);
+    }, delay);
   }
 
   // -----------------------------------------------------------
@@ -102,7 +167,11 @@ export class WebSocketService {
 
   /** Desconectar del servidor */
   disconnect(): void {
+    clearTimeout(this.reconnectTimer);
+    this.reconnectAttempts = this.MAX_RECONNECT_ATTEMPTS; // Evitar reconexión automática
+
     if (this.socket) {
+      this.socket.removeAllListeners();
       this.socket.disconnect();
       this.socket = null;
       this.statusSubject.next('disconnected');
