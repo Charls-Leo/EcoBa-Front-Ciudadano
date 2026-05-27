@@ -4,7 +4,6 @@ import { FormsModule } from '@angular/forms';
 import { IonicModule, AlertController, LoadingController } from '@ionic/angular';
 import { Router } from '@angular/router';
 import { ReporteService } from '../../core/services/reporte.service';
-import { AuthService } from '../../core/services/auth.service';
 import { ReporteRequest } from '../../core/models';
 
 @Component({
@@ -33,18 +32,8 @@ export class ReportesPage {
     private router: Router,
     private alertController: AlertController,
     private loadingController: LoadingController,
-    private reporteService: ReporteService,
-    private authService: AuthService
+    private reporteService: ReporteService
   ) {}
-
-  /** Pre-llenar nombre y correo si el conductor está logueado */
-  ionViewWillEnter(): void {
-    const user = this.authService.getUser();
-    if (user) {
-      this.reporte.nombre = `${user.nombre} ${user.apellido}`.trim();
-      this.reporte.correo = user.email;
-    }
-  }
 
   goBack(): void {
     this.location.back();
@@ -56,9 +45,9 @@ export class ReportesPage {
     const routes: Record<string, string> = {
       inicio: '/home',
       mapa: '/mapa',
-      recorridos: '/recorridos',
       rutas: '/rutas',
-      perfil: '/perfil'
+      reportes: '/reportes',
+      learn: '/learn'
     };
 
     if (routes[nav]) {
@@ -74,11 +63,10 @@ export class ReportesPage {
     }
 
     const archivo = input.files[0];
+    const maxSizeMb = 5;
 
-    // Validar tamaño (5 MB máximo)
-    const MAX_SIZE_MB = 5;
-    if (archivo.size > MAX_SIZE_MB * 1024 * 1024) {
-      this.mostrarAlerta('Imagen muy grande', `La imagen no puede superar ${MAX_SIZE_MB} MB.`);
+    if (archivo.size > maxSizeMb * 1024 * 1024) {
+      this.mostrarAlerta('Imagen muy grande', `La imagen no puede superar ${maxSizeMb} MB.`);
       input.value = '';
       return;
     }
@@ -87,11 +75,9 @@ export class ReportesPage {
     this.nombreImagen = archivo.name;
 
     const reader = new FileReader();
-
     reader.onload = () => {
       this.imagenPreview = reader.result;
     };
-
     reader.readAsDataURL(archivo);
   }
 
@@ -110,7 +96,6 @@ export class ReportesPage {
       return;
     }
 
-    // Mostrar loading
     const loading = await this.loadingController.create({
       message: 'Enviando reporte...',
       spinner: 'crescent'
@@ -120,29 +105,23 @@ export class ReportesPage {
     this.enviando = true;
 
     try {
-      // Construir el payload para el backend
-      const user = this.authService.getUser();
-
       const payload: ReporteRequest = {
         nombre: this.reporte.nombre.trim(),
         email: this.reporte.correo.trim(),
-        reporte: this.reporte.descripcion.trim(),
-        usuario_id: user?.id_usuario
+        reporte: this.reporte.descripcion.trim()
       };
 
-      // Convertir la imagen a base64 si existe
       if (this.reporte.imagen && this.imagenPreview) {
         payload.imagen_base64 = this.imagenPreview as string;
       }
 
-      // Enviar al backend
       this.reporteService.crearReporte(payload).subscribe({
         next: async () => {
           await loading.dismiss();
           this.enviando = false;
 
           await this.mostrarAlerta(
-            '¡Reporte enviado!',
+            'Reporte enviado',
             'Tu reporte fue registrado exitosamente. Gracias por ayudar a mejorar el servicio.'
           );
 
@@ -151,7 +130,7 @@ export class ReportesPage {
         error: async (err) => {
           await loading.dismiss();
           this.enviando = false;
-          console.error('❌ Error al enviar reporte:', err);
+          console.error('Error al enviar reporte:', err);
 
           const mensaje = err.error?.mensaje || 'Ocurrió un error inesperado. Intenta de nuevo más tarde.';
           await this.mostrarAlerta('Error al enviar', mensaje);
@@ -160,16 +139,15 @@ export class ReportesPage {
     } catch (err) {
       await loading.dismiss();
       this.enviando = false;
-      console.error('❌ Error inesperado:', err);
+      console.error('Error inesperado:', err);
       await this.mostrarAlerta('Error', 'Ocurrió un error inesperado.');
     }
   }
 
   limpiarFormulario(): void {
-    const user = this.authService.getUser();
     this.reporte = {
-      nombre: user ? `${user.nombre} ${user.apellido}`.trim() : '',
-      correo: user ? user.email : '',
+      nombre: '',
+      correo: '',
       descripcion: '',
       imagen: null
     };

@@ -24,9 +24,9 @@ export class AyudaPage {
     const routes: Record<string, string> = {
       inicio: '/home',
       mapa: '/mapa',
-      recorridos: '/recorridos',
       rutas: '/rutas',
-      perfil: '/perfil'
+      reportes: '/reportes',
+      learn: '/learn'
     };
     if (routes[nav]) {
       this.router.navigate([routes[nav]]);

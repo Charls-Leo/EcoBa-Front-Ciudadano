@@ -1,8 +1,7 @@
-import { Component, OnInit } from '@angular/core';
+import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { IonicModule } from '@ionic/angular';
-import { AuthService } from 'src/app/core/services/auth.service';
 
 @Component({
   selector: 'app-home',
@@ -11,50 +10,40 @@ import { AuthService } from 'src/app/core/services/auth.service';
   templateUrl: './home.page.html',
   styleUrls: ['./home.page.scss']
 })
-export class HomePage implements OnInit {
-  activeNav = 'inicio';
-  isLoggedIn = false;
-
+export class HomePage {
   quickAccess = [
     {
-      title: 'Recorridos',
-      desc: 'Consulta tu recorrido actual',
-      route: '/recorridos',
-      icon: 'recorridos',
-      cardClass: 'card-green'
-    },
-    {
       title: 'Rutas',
-      desc: 'Visualiza rutas asignadas',
-      route: '/rutas',
+      desc: 'Consulta horarios y zonas de recolección',
+      route: '/tabs/rutas',
       icon: 'routes',
       cardClass: 'card-orange'
     },
     {
       title: 'Mapa',
-      desc: 'Ubicación y seguimiento',
-      route: '/mapa',
+      desc: 'Ubica rutas y puntos de interés',
+      route: '/tabs/mapa',
       icon: 'map',
       cardClass: 'card-blue'
     },
     {
       title: 'Reportes',
-      desc: 'Novedades y alertas',
-      route: '/reportes',
+      desc: 'Informa novedades del servicio',
+      route: '/tabs/reportes',
       icon: 'report',
       cardClass: 'card-purple'
     },
     {
-      title: 'Perfil',
-      desc: 'Tus datos de acceso',
-      route: '/perfil',
-      icon: 'profile',
-      cardClass: 'card-red'
+      title: 'Learn',
+      desc: 'Aprende a reciclar y usar la app',
+      route: '/tabs/learn',
+      icon: 'learn',
+      cardClass: 'card-green'
     },
     {
       title: 'Ayuda',
-      desc: 'Soporte e información',
-      route: '/ayuda',
+      desc: 'Soporte e información general',
+      route: '/tabs/ayuda',
       icon: 'help',
       cardClass: 'card-teal'
     }
@@ -62,76 +51,28 @@ export class HomePage implements OnInit {
 
   recentActivity = [
     {
-      title: 'Ruta asignada',
-      sub: 'Recorrido de la mañana confirmado',
-      badge: 'Activo',
-      badgeClass: 'success',
-      icon: 'routes',
+      title: 'Separa antes de entregar',
+      sub: 'Limpia envases y aparta orgánicos, reciclables y no aprovechables.',
+      badge: 'Eco tip',
+      badgeClass: 'badge-green',
+      icon: 'learn',
       bg: '#e8f7ef',
       iconColor: '#2f9e62'
     },
     {
-      title: 'Reporte enviado',
-      sub: 'Incidencia registrada correctamente',
-      badge: 'Enviado',
-      badgeClass: 'info',
+      title: 'Reportes ciudadanos',
+      sub: 'Puedes avisar sobre retrasos, puntos críticos o residuos acumulados.',
+      badge: 'Servicio',
+      badgeClass: 'badge-blue',
       icon: 'report',
       bg: '#eef5ff',
       iconColor: '#4b7bec'
     }
   ];
 
-  constructor(
-    private router: Router,
-    private authService: AuthService
-  ) {}
-
-  ngOnInit(): void {
-    this.checkSession();
-  }
-
-  ionViewWillEnter(): void {
-    this.checkSession();
-  }
-
-  get userName(): string {
-    const user = this.authService.getUser();
-    return user ? user.nombre : 'Conductor';
-  }
-
-  checkSession(): void {
-    this.isLoggedIn = this.authService.isLoggedIn();
-  }
+  constructor(private router: Router) {}
 
   goTo(route: string): void {
-    if (!this.isLoggedIn && route !== '/ayuda') {
-      this.router.navigate(['/login']);
-      return;
-    }
     this.router.navigate([route]);
-  }
-
-  goToTopAction(): void {
-    if (this.isLoggedIn) {
-      this.router.navigate(['/perfil']);
-    } else {
-      this.router.navigate(['/login']);
-    }
-  }
-
-  setActiveNav(nav: string): void {
-    this.activeNav = nav;
-
-    if (nav === 'inicio') {
-      this.router.navigate(['/home']);
-    } else if (nav === 'mapa') {
-      this.router.navigate(['/mapa']);
-    } else if (nav === 'recorridos') {
-      this.router.navigate(['/recorridos']);
-    } else if (nav === 'rutas') {
-      this.router.navigate(['/rutas']);
-    } else if (nav === 'perfil') {
-      this.router.navigate(['/perfil']);
-    }
   }
 }

@@ -21,13 +21,13 @@ export class OnboardingPage {
     },
     {
       step: 'Paso 2',
-      title: 'Consulta rutas y recorridos',
-      text: 'Visualiza información útil sobre recorridos o procesos de recolección de manera clara y organizada.'
+      title: 'Consulta rutas y mapa',
+      text: 'Visualiza información útil sobre horarios, zonas y procesos de recolección de manera clara y organizada.'
     },
     {
       step: 'Paso 3',
-      title: 'Gestiona todo en un solo lugar',
-      text: 'Accede a una experiencia simple y moderna para conocer, consultar y usar mejor los servicios de EcoBahía.'
+      title: 'Aprende hábitos ecológicos',
+      text: 'Accede a guías simples para reciclar mejor y usar los servicios de EcoBahía como ciudadano.'
     }
   ];
 

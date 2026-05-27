@@ -1,5 +1,4 @@
 import { Routes } from '@angular/router';
-import { authGuard, noAuthGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
   {
@@ -9,40 +8,31 @@ export const routes: Routes = [
   },
   {
     path: 'splash',
-    canActivate: [noAuthGuard],
     loadComponent: () =>
       import('./features/inicio/splash/splash.page').then(m => m.SplashPage)
   },
   {
     path: 'onboarding',
-    canActivate: [noAuthGuard],
     loadComponent: () =>
       import('./features/inicio/onboarding/onboarding.page').then(m => m.OnboardingPage)
   },
   {
     path: 'login',
-    canActivate: [noAuthGuard],
-    loadComponent: () =>
-      import('./auth/login/login.page').then((m) => m.LoginPage),
+    redirectTo: '/tabs/home',
+    pathMatch: 'full'
   },
   {
     path: 'registro',
-    canActivate: [noAuthGuard],
-    loadComponent: () =>
-      import('./auth/registro/registro.page').then((m) => m.RegistroPage),
+    redirectTo: '/tabs/home',
+    pathMatch: 'full'
   },
   {
     path: 'tabs',
-    canActivate: [authGuard],
     loadComponent: () => import('./layout/tabs/tabs.page').then((m) => m.TabsPage),
     children: [
       {
         path: 'home',
         loadComponent: () => import('./features/inicio/home/home.page').then(m => m.HomePage)
-      },
-      {
-        path: 'recorridos',
-        loadComponent: () => import('./features/recorridos/recorridos.page').then(m => m.RecorridosPage)
       },
       {
         path: 'rutas',
@@ -53,12 +43,12 @@ export const routes: Routes = [
         loadComponent: () => import('./features/mapa/mapa.page').then(m => m.MapaPage)
       },
       {
-        path: 'perfil',
-        loadComponent: () => import('./features/perfil/perfil.page').then(m => m.PerfilPage)
-      },
-      {
         path: 'ayuda',
         loadComponent: () => import('./features/ayuda/ayuda.page').then(m => m.AyudaPage)
+      },
+      {
+        path: 'learn',
+        loadComponent: () => import('./features/learn/learn.page').then(m => m.LearnPage)
       },
       {
         path: 'reportes',
@@ -83,7 +73,7 @@ export const routes: Routes = [
   },
   {
     path: 'recorridos',
-    redirectTo: '/tabs/recorridos',
+    redirectTo: '/tabs/home',
     pathMatch: 'full'
   },
   {
@@ -93,7 +83,7 @@ export const routes: Routes = [
   },
   {
     path: 'perfil',
-    redirectTo: '/tabs/perfil',
+    redirectTo: '/tabs/home',
     pathMatch: 'full'
   },
   {
@@ -104,6 +94,11 @@ export const routes: Routes = [
   {
     path: 'reportes',
     redirectTo: '/tabs/reportes',
+    pathMatch: 'full'
+  },
+  {
+    path: 'learn',
+    redirectTo: '/tabs/learn',
     pathMatch: 'full'
   },
   {

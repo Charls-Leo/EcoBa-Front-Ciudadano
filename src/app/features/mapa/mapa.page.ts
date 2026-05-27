@@ -407,8 +407,8 @@ export class MapaPage implements OnDestroy, OnInit {
 
           this.isFinishing = false;
 
-          // 3. Navegar de vuelta a recorridos
-          this.router.navigate(['/tabs/recorridos']);
+          // 3. Navegar de vuelta a rutas
+          this.router.navigate(['/tabs/rutas']);
         },
         error: (err) => {
           console.error('[MapaPage] Error al finalizar en BD', err);

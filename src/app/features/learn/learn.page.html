@@ -1,0 +1,59 @@
+<ion-content [fullscreen]="true" class="learn-content">
+  <div class="learn-page">
+
+    <div class="section-header-bar">
+      <button class="back-btn" (click)="goBack()" type="button">
+        <svg viewBox="0 0 24 24">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </button>
+      <div class="header-info">
+        <div class="header-title">Learn</div>
+        <div class="header-subtitle">Guía ciudadana y educación ecológica</div>
+      </div>
+      <div class="header-spacer"></div>
+    </div>
+
+    <div class="scroll-content">
+      <section class="learn-hero">
+        <div class="hero-label">EcoBahía ciudadano</div>
+        <h1>Usa mejor la app y separa mejor tus residuos</h1>
+        <p>
+          Encuentra acciones simples para consultar rutas, enviar reportes y aportar a una recolección más limpia.
+        </p>
+      </section>
+
+      <section class="learn-section">
+        <div class="section-title">Cómo usar la app</div>
+        <div class="guide-list">
+          <article class="guide-item" *ngFor="let step of guideSteps; let i = index">
+            <div class="step-number">{{ i + 1 }}</div>
+            <div>
+              <h2>{{ step.title }}</h2>
+              <p>{{ step.text }}</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="learn-section">
+        <div class="section-title">Temas ecológicos</div>
+        <div class="topic-grid">
+          <article class="topic-card" *ngFor="let topic of ecoTopics">
+            <div class="topic-icon">
+              <svg viewBox="0 0 24 24">
+                <path d="M20 6c-5.5 0-10 4.5-10 10v4"></path>
+                <path d="M4 14c4.5 0 8-3.5 8-8V4"></path>
+                <path d="M4 14c0 3.3 2.7 6 6 6"></path>
+                <path d="M20 6c0 3.3-2.7 6-6 6"></path>
+              </svg>
+            </div>
+            <h2>{{ topic.title }}</h2>
+            <p>{{ topic.text }}</p>
+          </article>
+        </div>
+      </section>
+    </div>
+
+  </div>
+</ion-content>
