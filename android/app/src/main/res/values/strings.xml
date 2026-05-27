@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">EcoBahía Conductor</string>
+    <string name="title_activity_main">EcoBahía Conductor</string>
+    <string name="package_name">com.ecobahia.conductor</string>
+    <string name="custom_url_scheme">com.ecobahia.conductor</string>
+</resources>

@@ -39,6 +39,17 @@ export class PerfilPage implements OnInit {
     }
   }
 
+  getShortId(id: string | undefined): string {
+    if (!id) return '';
+    // Genera un número de 3 dígitos de forma determinista y única a partir del UUID
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+      hash = id.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const shortNum = Math.abs(hash % 900) + 100; // Número entre 100 y 999
+    return `#${shortNum}`;
+  }
+
   async cerrarSesion(): Promise<void> {
     this.authService.logout();
     this.isLoggedIn = false;

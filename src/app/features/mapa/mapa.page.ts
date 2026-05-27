@@ -341,13 +341,28 @@ export class MapaPage implements OnDestroy, OnInit {
     const mapElement = document.getElementById('map');
     if (!mapElement) return;
 
-    this.map = L.map('map', { attributionControl: false, zoomControl: false }).setView([3.8801, -77.03116], 14);
+    // Límites geográficos para bloquear la vista en la ciudad de Buenaventura
+    const southWest = L.latLng(3.75, -77.18);
+    const northEast = L.latLng(3.98, -76.90);
+    const bounds = L.latLngBounds(southWest, northEast);
 
-    // Mapa Estándar de Google Maps (Roadmap)
+    this.map = L.map('map', { 
+      attributionControl: false, 
+      zoomControl: false,
+      maxBounds: bounds,
+      maxBoundsViscosity: 1.0,
+      minZoom: 12
+    }).setView([3.8801, -77.03116], 14);
+
+    // Mapa Estándar de Google Maps (Roadmap) con optimizaciones premium de renderizado suave
     L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
       maxZoom: 20,
+      minZoom: 12,
       subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
-      attribution: '© Google Maps'
+      attribution: '© Google Maps',
+      updateWhenIdle: false,        // Carga mosaicos continuamente MIENTRAS arrastras, no solo al soltar
+      updateInterval: 50,           // Actualiza los mosaicos de forma ultra rápida durante el arrastre (50ms en vez de 200ms)
+      keepBuffer: 10                // Mantiene cargados hasta 10 mosaicos fuera de la pantalla en todas las direcciones para que no haya parpadeos al moverse
     }).addTo(this.map);
 
     this.rutasLayer.addTo(this.map);

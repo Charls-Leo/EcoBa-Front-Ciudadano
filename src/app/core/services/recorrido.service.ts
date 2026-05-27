@@ -19,6 +19,7 @@ export class RecorridoService {
 
   // ═══ ESTRATEGIA DE CACHING ═══
   private conductorRecorridosCache: Recorrido[] | null = null;
+  private cachedConductorId: string | null = null; // Guardar el ID del conductor dueño de la caché actual
   private allRecorridosCache: Recorrido[] | null = null;
   private lastFetchTimeConductor = 0;
   private lastFetchTimeAll = 0;
@@ -39,7 +40,10 @@ export class RecorridoService {
     }
 
     const now = Date.now();
-    if (!forceRefresh && this.conductorRecorridosCache && (now - this.lastFetchTimeConductor < this.CACHE_DURATION)) {
+    const isDifferentUser = this.cachedConductorId !== usuario.id_usuario;
+
+    // Si cambia el usuario logueado, forzar la invalidación inmediata de la caché
+    if (!forceRefresh && !isDifferentUser && this.conductorRecorridosCache && (now - this.lastFetchTimeConductor < this.CACHE_DURATION)) {
       console.log('📦 [RecorridoService] Devolviendo recorridos del conductor desde caché local');
       return of(this.conductorRecorridosCache);
     }
@@ -47,6 +51,7 @@ export class RecorridoService {
     return this.http.get<Recorrido[]>(`${this.baseUrl}/conductor/${usuario.id_usuario}`).pipe(
       tap(data => {
         this.conductorRecorridosCache = data;
+        this.cachedConductorId = usuario.id_usuario;
         this.lastFetchTimeConductor = now;
       })
     );
@@ -85,6 +90,7 @@ export class RecorridoService {
   /** Limpia el cache de recorridos manualmente */
   clearCache(): void {
     this.conductorRecorridosCache = null;
+    this.cachedConductorId = null;
     this.allRecorridosCache = null;
     this.lastFetchTimeConductor = 0;
     this.lastFetchTimeAll = 0;

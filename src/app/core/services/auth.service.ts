@@ -90,5 +90,10 @@ export class AuthService {
     localStorage.removeItem(this.STORAGE_KEY);
     localStorage.removeItem(this.TOKEN_KEY);
     localStorage.removeItem(this.USER_KEY);
+    // Limpiar también cualquier recorrido activo para evitar fugas de datos entre sesiones
+    localStorage.removeItem('eco_active_recorrido_id');
+    localStorage.removeItem('eco_active_ruta_id');
+    localStorage.removeItem('eco_active_placa');
+    localStorage.removeItem('eco_active_ruta_name');
   }
 }

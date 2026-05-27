@@ -60,3 +60,23 @@
   }
 }
 
+/* ==========================================================================
+   Leaflet Map Seamless Rendering (Eliminates white flashes completely)
+   ========================================================================== */
+.leaflet-container,
+.leaflet-pane,
+.leaflet-tile,
+.leaflet-tile-container,
+.leaflet-layer,
+.leaflet-zoom-animated {
+  background: #f4f3f0 !important;
+  background-color: #f4f3f0 !important;
+}
+
+/* Evitar cualquier borde o destello blanco en los mosaicos de imagen */
+.leaflet-tile {
+  border: none !important;
+  outline: none !important;
+}
+
+
