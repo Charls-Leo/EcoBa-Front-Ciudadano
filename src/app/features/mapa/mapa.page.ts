@@ -3,10 +3,10 @@ import { CommonModule, Location } from '@angular/common';
 import { IonicModule, AlertController } from '@ionic/angular';
 import { Router, ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { takeUntil, filter } from 'rxjs/operators';
 import * as L from 'leaflet';
 import { RutaService } from 'src/app/core/services/ruta.service';
-import { Ruta, GeoJSONGeometry } from 'src/app/core/models';
+import { Ruta, GeoJSONGeometry, LocationData } from 'src/app/core/models';
 import { LocationService } from 'src/app/core/services/location.service';
 import { TrackingStateService } from 'src/app/core/services/tracking-state.service';
 import { TrackingService } from 'src/app/core/services/tracking.service';
@@ -15,6 +15,7 @@ import { CameraService } from 'src/app/core/services/camera.service';
 import { ConnectivityService } from 'src/app/core/services/connectivity.service';
 import { OfflineQueueService } from 'src/app/core/services/offline-queue.service';
 import { AuthService } from 'src/app/core/services/auth.service';
+import { WebSocketService } from 'src/app/core/services/websocket.service';
 import { environment } from 'src/environments/environment';
 
 @Component({
@@ -26,14 +27,22 @@ import { environment } from 'src/environments/environment';
 })
 export class MapaPage implements OnDestroy, OnInit {
   private map: L.Map | undefined;
+  private tileLayer: L.TileLayer | undefined;
+  private mapReady = false;
+  private isDrawingRoute = false;
+  private resizeListener: (() => void) | null = null; // Para limpiar el listener de window.resize
   private rutasLayer: L.FeatureGroup = L.featureGroup();
   private destroy$ = new Subject<void>();
+  private pendingLocation: LocationData | null = null;
 
   rutas: Ruta[] = [];
   selectedRutaId: string | number | null = null;
   private truckMarker: L.Marker | null = null;
   public isEnRuta = false;
   private officialRouteCoords: L.LatLng[] = [];
+
+  // Marcadores de fotos
+  private photoMarkers: { [posicionId: string]: L.Marker } = {};
 
   // Ruta de acercamiento (OSRM)
   private approachRouteLayer: L.Polyline | null = null;
@@ -50,6 +59,10 @@ export class MapaPage implements OnDestroy, OnInit {
 
   togglePanel() {
     this.isPanelExpanded = !this.isPanelExpanded;
+    // El panel inferior cambia la altura del mapa: recalibramos Leaflet
+    if (this.map && this.mapReady) {
+      setTimeout(() => this.map!.invalidateSize({ animate: false }), 350);
+    }
   }
 
   // ═══ Preview de foto ═══
@@ -71,7 +84,8 @@ export class MapaPage implements OnDestroy, OnInit {
     private alertCtrl: AlertController,
     public connectivity: ConnectivityService,
     public offlineQueue: OfflineQueueService,
-    private authService: AuthService
+    private authService: AuthService,
+    private webSocketService: WebSocketService
   ) {}
 
   ngOnInit() {
@@ -101,30 +115,97 @@ export class MapaPage implements OnDestroy, OnInit {
               this.truckMarker.remove();
               this.truckMarker = null;
             }
+            // Limpiar marcadores de fotos
+            Object.keys(this.photoMarkers).forEach(pid => {
+              this.photoMarkers[pid].remove();
+              delete this.photoMarkers[pid];
+            });
           }
+        }
+      });
+
+    // Escuchar fotos en tiempo real tomadas por este conductor
+    this.webSocketService.messages$
+      .pipe(
+        takeUntil(this.destroy$),
+        filter(msg => msg.event === 'location:photo')
+      )
+      .subscribe((msg: any) => {
+        const foto = msg.data;
+        if (foto && this.map && String(foto.recorrido_id) === String(this.trackingState.recorridoActivo)) {
+          console.log('[MAPA] 📸 Nueva foto recibida por WebSocket:', foto);
+          this.agregarMarcadorFoto(
+            foto.posicion_id, 
+            foto.lat, 
+            foto.lon, 
+            foto.capturado_ts, 
+            String(foto.recorrido_id)
+          );
         }
       });
   }
 
   ionViewDidEnter() {
+    console.log('[MAPA] ionViewDidEnter — map exists?', !!this.map);
+    this.mapReady = false;
+
     if (!this.map) {
       this.initMap();
       this.escucharUbicacionEnTiempoReal();
+
+      this.resizeListener = () => {
+        if (this.map && this.mapReady) {
+          setTimeout(() => this.map!.invalidateSize({ animate: false }), 200);
+        }
+      };
+      window.addEventListener('resize', this.resizeListener);
     }
 
-    // Forzar renderizado completo del mapa
     setTimeout(() => {
-      if (this.map) {
-        this.map.invalidateSize();
-        window.dispatchEvent(new Event('resize'));
-        if (this.rutasLayer.getLayers().length > 0) {
-          this.map.fitBounds(this.rutasLayer.getBounds(), { padding: [40, 40] });
-        }
+      if (!this.map) {
+        console.error('[MAPA] ERROR: map is null after 400ms timeout!');
+        return;
       }
-    }, 300);
+      const size = this.map.getSize();
+      console.log('[MAPA] Before invalidateSize — container size:', size.x, 'x', size.y);
+      this.map.invalidateSize({ animate: false });
+      const sizeAfter = this.map.getSize();
+      console.log('[MAPA] After invalidateSize — container size:', sizeAfter.x, 'x', sizeAfter.y);
+
+      // Si el tamaño antes era 0x0 (Leaflet creó el mapa sin dimensiones),
+      // los tiles están posicionados fuera de la vista. Forzamos setView
+      // para que Leaflet recalcule posiciones y recargue tiles en el lugar correcto.
+      if (size.x === 0 || size.y === 0) {
+        console.warn('[MAPA] ⚠️ Tamaño era 0 — forzando setView para reposicionar tiles');
+        this.map.setView([3.8801, -77.03116], 14, { animate: false });
+      }
+
+      this.mapReady = true;
+      console.log('[MAPA] mapReady = true');
+
+      if (this.pendingLocation) {
+        const loc = this.pendingLocation;
+        this.pendingLocation = null;
+        this.procesarUbicacionEnTiempoReal(loc);
+      }
+
+      requestAnimationFrame(() => this.dibujarRutas());
+    }, 400);
+  }
+
+  ionViewWillLeave() {
+    this.mapReady = false;
   }
 
   ngOnDestroy() {
+    if (this.resizeListener) {
+      window.removeEventListener('resize', this.resizeListener);
+      this.resizeListener = null;
+    }
+    if (this.map) {
+      this.map.remove();
+      this.map = undefined;
+    }
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -250,6 +331,9 @@ export class MapaPage implements OnDestroy, OnInit {
       this.photoStatusMsg = '¡Foto enviada correctamente!';
       this.photoStatusSuccess = true;
 
+      // Pintar el marcador de la foto localmente de inmediato para feedback instantáneo
+      this.agregarMarcadorFoto(posicionId, lat, lon, new Date().toISOString(), String(recorridoId));
+
       // Cerrar preview después de 1.5s
       setTimeout(() => {
         this.cerrarPreview();
@@ -339,39 +423,61 @@ export class MapaPage implements OnDestroy, OnInit {
 
   private initMap(): void {
     const mapElement = document.getElementById('map');
+    console.log('[MAPA] initMap — #map element found?', !!mapElement);
     if (!mapElement) return;
 
-    // Límites geográficos para bloquear la vista en la ciudad de Buenaventura
+    const rect = mapElement.getBoundingClientRect();
+    console.log('[MAPA] initMap — #map rect:', rect.width, 'x', rect.height);
+
+    // Límites geográficos para la ciudad de Buenaventura
     const southWest = L.latLng(3.75, -77.18);
     const northEast = L.latLng(3.98, -76.90);
     const bounds = L.latLngBounds(southWest, northEast);
 
-    this.map = L.map('map', { 
-      attributionControl: false, 
+    this.map = L.map('map', {
+      attributionControl: false,
       zoomControl: false,
-      maxBounds: bounds,
-      maxBoundsViscosity: 1.0,
       minZoom: 12
     }).setView([3.8801, -77.03116], 14);
 
-    // Mapa Estándar de Google Maps (Roadmap) con optimizaciones premium de renderizado suave
-    L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+    // LOG CLAVE: tamaño interno de Leaflet en el momento de creación
+    // Si es 0x0, los tiles se posicionan fuera de la vista y no se ven aunque carguen.
+    const leafletSize = this.map.getSize();
+    console.log('[MAPA] initMap — Leaflet internal size at creation:', leafletSize.x, 'x', leafletSize.y);
+    console.log('[MAPA] initMap — Leaflet map created');
+
+    // Evitar que el usuario arrastre el mapa fuera de Buenaventura usando eventos
+    this.map.on('drag', () => {
+      if (this.map) {
+        const center = this.map.getCenter();
+        if (!bounds.contains(center)) {
+          const lat = Math.max(bounds.getSouth(), Math.min(bounds.getNorth(), center.lat));
+          const lng = Math.max(bounds.getWest(), Math.min(bounds.getEast(), center.lng));
+          this.map.panTo([lat, lng], { animate: false });
+        }
+      }
+    });
+
+    // Mapa Estándar de Google Maps con logs de eventos de tile
+    this.tileLayer = L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
       maxZoom: 20,
       minZoom: 12,
       subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
-      attribution: '© Google Maps',
-      updateWhenIdle: false,        // Carga mosaicos continuamente MIENTRAS arrastras, no solo al soltar
-      updateInterval: 50,           // Actualiza los mosaicos de forma ultra rápida durante el arrastre (50ms en vez de 200ms)
-      keepBuffer: 10                // Mantiene cargados hasta 10 mosaicos fuera de la pantalla en todas las direcciones para que no haya parpadeos al moverse
-    }).addTo(this.map);
+      attribution: '© Google Maps'
+    });
+
+    // Eventos de diagnóstico del tile layer
+    this.tileLayer.on('loading', () => console.log('[MAPA] tileLayer: descargando tiles...'));
+    this.tileLayer.on('load',    () => console.log('[MAPA] tileLayer: TODOS los tiles cargados ✅'));
+    this.tileLayer.on('tileload', (e: any) => console.log('[MAPA] tile cargado OK:', e.coords?.z, e.coords?.x, e.coords?.y));
+    this.tileLayer.on('tileerror', (e: any) => console.error('[MAPA] ERROR en tile:', e.coords, e.error));
+    this.tileLayer.on('remove', () => console.warn('[MAPA] ⚠️ tileLayer fue REMOVIDO del mapa! Stack:', new Error().stack));
+
+    this.tileLayer.addTo(this.map);
+    console.log('[MAPA] initMap — tileLayer added to map');
 
     this.rutasLayer.addTo(this.map);
-
-    setTimeout(() => {
-      if (this.map) {
-        this.map.invalidateSize();
-      }
-    }, 500);
+    console.log('[MAPA] initMap — rutasLayer added to map');
   }
 
   escucharUbicacionEnTiempoReal() {
@@ -380,39 +486,63 @@ export class MapaPage implements OnDestroy, OnInit {
       .subscribe(loc => {
         if (!this.map) return;
 
-        const latlng = L.latLng(loc.latitude, loc.longitude);
-
-        if (!this.truckMarker) {
-          const placa = this.trackingState.vehiculoPlaca || undefined;
-          const rutaNombre = this.trackingState.nombreRuta || undefined;
-
-          const truckIcon = L.divIcon({
-            html: this.makeTruckPinHtml(placa, rutaNombre, loc.heading || 0),
-            className: 'truck-marker-wrapper',
-            iconSize: [52, 52],
-            iconAnchor: [26, 26]
-          });
-          this.truckMarker = L.marker(latlng, { icon: truckIcon, zIndexOffset: 1000 }).addTo(this.map);
-          // Si es la primera vez que recibimos la ubicación, centramos el mapa en el conductor
-          this.map.setView(latlng, 16);
-        } else {
-          // Actualizar posición y rotación
-          const placa = this.trackingState.vehiculoPlaca || undefined;
-          const rutaNombre = this.trackingState.nombreRuta || undefined;
-          
-          this.truckMarker.setLatLng(latlng);
-          this.truckMarker.setIcon(L.divIcon({
-            html: this.makeTruckPinHtml(placa, rutaNombre, loc.heading || 0),
-            className: 'truck-marker-wrapper',
-            iconSize: [52, 52],
-            iconAnchor: [26, 26]
-          }));
+        if (!this.mapReady) {
+          this.pendingLocation = loc;
+          return;
         }
 
-        this.lastLocation = { lat: loc.latitude, lng: loc.longitude };
-        this.isEnRuta = this.checkIfOnRoute(latlng);
-        this.verificarRutaDeAcercamiento();
+        this.procesarUbicacionEnTiempoReal(loc);
       });
+  }
+
+  private procesarUbicacionEnTiempoReal(loc: LocationData) {
+    if (!this.map) return;
+
+    const latlng = L.latLng(loc.latitude, loc.longitude);
+
+    if (!this.truckMarker) {
+      const placa = this.trackingState.vehiculoPlaca || undefined;
+      const rutaNombre = this.trackingState.nombreRuta || undefined;
+
+      const truckIcon = L.divIcon({
+        html: this.makeTruckPinHtml(placa, rutaNombre, loc.heading || 0),
+        className: 'truck-marker-wrapper',
+        iconSize: [52, 52],
+        iconAnchor: [26, 26]
+      });
+      this.truckMarker = L.marker(latlng, { 
+        icon: truckIcon, 
+        zIndexOffset: 1000, 
+        interactive: false 
+      }).addTo(this.map);
+      
+      // Si es la primera vez que recibimos la ubicación, centramos el mapa en el conductor (solo si está dentro de Buenaventura)
+      const southWest = L.latLng(3.75, -77.18);
+      const northEast = L.latLng(3.98, -76.90);
+      const bounds = L.latLngBounds(southWest, northEast);
+
+      if (bounds.contains(latlng)) {
+        this.map.setView(latlng, 16);
+      } else {
+        console.warn('[MapaPage] Ubicación inicial de tracking fuera de Buenaventura. Se mantiene vista centrada.');
+      }
+    } else {
+      // Actualizar posición y rotación
+      const placa = this.trackingState.vehiculoPlaca || undefined;
+      const rutaNombre = this.trackingState.nombreRuta || undefined;
+      
+      this.truckMarker.setLatLng(latlng);
+      this.truckMarker.setIcon(L.divIcon({
+        html: this.makeTruckPinHtml(placa, rutaNombre, loc.heading || 0),
+        className: 'truck-marker-wrapper',
+        iconSize: [52, 52],
+        iconAnchor: [26, 26]
+      }));
+    }
+
+    this.lastLocation = { lat: loc.latitude, lng: loc.longitude };
+    this.isEnRuta = this.checkIfOnRoute(latlng);
+    this.verificarRutaDeAcercamiento();
   }
 
   // ═══════════════════════════════════════════
@@ -518,9 +648,41 @@ export class MapaPage implements OnDestroy, OnInit {
   }
 
   dibujarRutas() {
+    console.log('[MAPA] dibujarRutas — map?', !!this.map, '| rutas?', this.rutas.length, '| selectedRutaId?', this.selectedRutaId, '| mapReady?', this.mapReady);
     if (!this.map || !this.rutas.length) return;
 
     this.rutasLayer.clearLayers();
+    console.log('[MAPA] dibujarRutas — rutasLayer cleared');
+
+    // Limpiar marcadores de fotos anteriores
+    Object.keys(this.photoMarkers).forEach(pid => {
+      this.photoMarkers[pid].remove();
+      delete this.photoMarkers[pid];
+    });
+
+    // Cargar fotos guardadas del recorrido activo si existe
+    const recorridoId = this.trackingState.recorridoActivo;
+    if (recorridoId) {
+      this.recorridoService.obtenerFotosRecorrido(recorridoId)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: (res: any) => {
+            const fotos = res?.data || res || [];
+            console.log('[MAPA] 📸 Cargadas fotos existentes del recorrido:', fotos.length);
+            fotos.forEach((f: any) => {
+              this.agregarMarcadorFoto(
+                f.id || f.id_posiciones || f.posicion_id, 
+                f.lat, 
+                f.lon, 
+                f.capturado_ts || f.timestamp || f.created_at, 
+                String(recorridoId)
+              );
+            });
+          },
+          error: (err) => console.error('[MAPA] Error al cargar fotos del recorrido:', err)
+        });
+    }
+
     if (this.approachRouteLayer) {
       this.approachRouteLayer.remove();
       this.approachRouteLayer = null;
@@ -560,7 +722,19 @@ export class MapaPage implements OnDestroy, OnInit {
         }
 
         // L.latLng expects (lat, lng), GeoJSON has [lng, lat]
-        const latlngs = allCoords.map((c: number[]) => L.latLng(c[1], c[0]));
+        const latlngs = allCoords
+          .map((c: number[]) => {
+            if (!c || c.length < 2) return null;
+            const lat = Number(c[1]);
+            const lng = Number(c[0]);
+            if (isNaN(lat) || isNaN(lng)) return null;
+            if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+            return L.latLng(lat, lng);
+          })
+          .filter((loc): loc is L.LatLng => loc !== null);
+
+        if (latlngs.length === 0) return;
+
         this.officialRouteCoords = latlngs;
 
         // ═══ ESTILO PREMIUM ═══
@@ -629,10 +803,22 @@ export class MapaPage implements OnDestroy, OnInit {
     });
 
     if (this.rutasLayer.getLayers().length > 0) {
-      this.map.fitBounds(this.rutasLayer.getBounds(), { padding: [50, 50] });
+      if (this.mapReady) {
+        const bounds = this.rutasLayer.getBounds();
+        if (bounds.isValid()) {
+          const center = bounds.getCenter();
+          console.log('[MAPA] dibujarRutas — panTo centro ruta:', center.lat, center.lng);
+
+          // animate: false evita que Leaflet dispare viewreset al final de la animación CSS,
+          // que borraría todos los tiles y causaría el mapa en blanco.
+          this.map!.panTo(center, { animate: false });
+          console.log('[MAPA] dibujarRutas — panTo completado');
+        }
+      }
     } else {
-      // Fallback Buenaventura si no hay ruta seleccionada
-      this.map.setView([3.8801, -77.03116], 14);
+      if (this.mapReady) {
+        this.map!.panTo([3.8801, -77.03116], { animate: false });
+      }
     }
 
     // Forzar re-cálculo de ruta de acercamiento porque las capas se limpiaron
@@ -748,17 +934,122 @@ export class MapaPage implements OnDestroy, OnInit {
     `;
   }
 
+  // ═══════════════════════════════════════════
+  // Métodos de Renderizado de Fotos en el Mapa
+  // ═══════════════════════════════════════════
+
+  private agregarMarcadorFoto(posicionId: string | number, lat: number, lon: number, timestamp: string, recorridoId: string): void {
+    if (!this.map || this.photoMarkers[String(posicionId)]) return;
+
+    const icon = L.divIcon({
+      html: this.makePhotoPinHtml(timestamp),
+      className: 'photo-marker-wrapper',
+      iconSize: [36, 36],
+      iconAnchor: [18, 36]
+    });
+
+    const marker = L.marker([lat, lon], { icon, zIndexOffset: 900 }).addTo(this.map);
+    (marker as any).recorridoId = recorridoId;
+
+    // Elevación dinámica de Z-Index al pasar el cursor (Hover)
+    marker.on('mouseover', () => {
+      marker.setZIndexOffset(2000);
+    });
+    marker.on('mouseout', () => {
+      marker.setZIndexOffset(900);
+    });
+
+    // Cargar imagen de forma dinámica al hacer click
+    const token = this.authService.getToken();
+    
+    marker.on('click', () => {
+      if (marker.getPopup()?.isOpen()) return;
+
+      const tempContent = `
+        <div style="display:flex; align-items:center; justify-content:center; width:220px; height:150px; background:#0f172a; border-radius:12px; color:#ffffff; font-family:'Inter',sans-serif; font-size:12px; font-weight:500;">
+          <span style="display:flex; align-items:center; gap:8px;">Cargando imagen... ⏳</span>
+        </div>`;
+      marker.bindPopup(tempContent, { className: 'custom-leaflet-photo-popup', minWidth: 220 }).openPopup();
+
+      fetch(`${environment.API_BASE_URL}/recorridos/posiciones/${posicionId}/imagen`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      .then(r => r.blob())
+      .then(blob => {
+        const imageUrl = URL.createObjectURL(blob);
+        const fechaStr = new Date(timestamp).toLocaleString('es-CO', { 
+          day: '2-digit', month: '2-digit', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', second: '2-digit'
+        });
+        
+        const popupHtml = `
+          <div style="position:relative; background:#000000; border-radius:12px; overflow:hidden; font-family:'Inter',sans-serif; display:flex; flex-direction:column; box-shadow:0 10px 25px rgba(0,0,0,0.5); width:240px;">
+            <img src="${imageUrl}" style="width:240px; height:auto; display:block; object-fit:cover; border-radius:12px 12px 0 0;" alt="Foto del Conductor">
+            <div style="background:#0f172a; padding:8px 12px; color:#ffffff; font-size:11px; font-weight:600; border-radius:0 0 12px 12px; border-top:1px solid rgba(255,255,255,0.1); display:flex; align-items:center; gap:6px;">
+              🗓️ ${fechaStr}
+            </div>
+          </div>`;
+        
+        marker.bindPopup(popupHtml, { className: 'custom-leaflet-photo-popup', minWidth: 240 }).openPopup();
+      })
+      .catch(() => {
+        marker.bindPopup(`<div style="padding:10px; color:#ef4444; font-family:'Inter',sans-serif; font-weight:600;">⚠️ Error al cargar la imagen</div>`).openPopup();
+      });
+    });
+
+    this.photoMarkers[String(posicionId)] = marker;
+  }
+
+  private makePhotoPinHtml(timestamp: string): string {
+    const hora = new Date(timestamp).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+    return `
+      <div class="photo-pin-inner" style="
+        position: relative; width: 36px; height: 36px; cursor: pointer;
+        filter: drop-shadow(0 3px 8px rgba(0,0,0,0.4));
+      ">
+        <div style="
+          width: 36px; height: 36px;
+          background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+          border: 3px solid white;
+          border-radius: 50% 50% 50% 0;
+          transform: rotate(-45deg);
+          display: flex; align-items: center; justify-content: center;
+          box-shadow: 0 2px 8px rgba(245,158,11,0.6);
+        ">
+          <span style="transform: rotate(45deg); font-size: 16px; line-height: 1;">📷</span>
+        </div>
+        <div style="
+          position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%);
+          background: rgba(0,0,0,0.7); color: white;
+          font-size: 9px; font-weight: 700; white-space: nowrap;
+          padding: 2px 5px; border-radius: 4px;
+          font-family: 'Inter', sans-serif;
+        ">${hora}</div>
+      </div>`;
+  }
+
   goBack(): void {
     this.location.back();
   }
 
   centerOnLocation(): void {
     if (this.map && this.lastLocation) {
-      this.map.setView(
-        [this.lastLocation.lat, this.lastLocation.lng], 
-        16, 
-        { animate: true, duration: 0.5 }
-      );
+      const latlng = L.latLng(this.lastLocation.lat, this.lastLocation.lng);
+      
+      const southWest = L.latLng(3.75, -77.18);
+      const northEast = L.latLng(3.98, -76.90);
+      const bounds = L.latLngBounds(southWest, northEast);
+
+      if (bounds.contains(latlng)) {
+        this.map.setView(
+          [this.lastLocation.lat, this.lastLocation.lng], 
+          16, 
+          { animate: true, duration: 0.5 }
+        );
+      } else {
+        console.warn('[MapaPage] Ubicación fuera de los límites de Buenaventura. Centrando en Buenaventura por defecto.');
+        this.map.setView([3.8801, -77.03116], 14, { animate: true, duration: 0.5 });
+      }
     }
   }
 }

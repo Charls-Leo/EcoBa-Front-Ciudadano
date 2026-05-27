@@ -393,8 +393,7 @@ ion-content.section-content {
 // ═══════════════════════════════════════════
 
 ::ng-deep .truck-marker-wrapper {
-  position: relative;
-  overflow: visible !important;
+  position: absolute !important;
 }
 
 // Pulso GPS radiante
@@ -427,9 +426,9 @@ ion-content.section-content {
   }
 }
 
-// Pulso del punto de ruta (inicio/fin)
+// Contenedor del punto de ruta (inicio/fin)
 ::ng-deep .route-point-wrapper {
-  overflow: visible !important;
+  position: absolute !important;
 }
 
 @keyframes pointPulse {
@@ -958,5 +957,65 @@ ion-content.section-content {
   }
   50% {
     box-shadow: 0 4px 15px rgba(245, 158, 11, 0.5);
+  }
+}
+
+// ═══════════════════════════════════════════
+// ESTILOS DE FOTOS EN TIEMPO REAL (MÁS POPUPS)
+// ═══════════════════════════════════════════
+::ng-deep .photo-marker-wrapper {
+  position: absolute !important;
+}
+
+// LEAFLET CUSTOM POPUP
+::ng-deep .custom-leaflet-photo-popup {
+  .leaflet-popup-content-wrapper {
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    border-radius: 12px;
+  }
+  
+  .leaflet-popup-content {
+    margin: 0 !important;
+    line-height: inherit !important;
+    width: auto !important;
+  }
+  
+  .leaflet-popup-tip-container {
+    display: none !important; // Oculta el triángulo blanco por defecto
+  }
+  
+  .leaflet-popup-close-button {
+    color: #ffffff !important;
+    font-size: 16px !important;
+    top: 8px !important;
+    right: 8px !important;
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.4) !important;
+    border-radius: 50% !important;
+    width: 24px !important;
+    height: 24px !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    padding: 0 !important;
+    transition: all 0.2s ease;
+    
+    &:hover {
+      background: rgba(239, 68, 68, 0.8) !important;
+      transform: scale(1.1);
+    }
+  }
+}
+
+// Hover effect for the photo pin inner container
+::ng-deep .photo-pin-inner {
+  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), filter 0.2s ease;
+  transform-origin: bottom center;
+  
+  &:hover {
+    transform: scale(1.25);
+    filter: drop-shadow(0 6px 14px rgba(0,0,0,0.6));
   }
 }

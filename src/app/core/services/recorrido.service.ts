@@ -142,4 +142,9 @@ export class RecorridoService {
       responseType: 'blob'
     });
   }
+
+  /** Obtiene las posiciones que contienen fotos para un recorrido */
+  obtenerFotosRecorrido(id: string | number): Observable<any[]> {
+    return this.http.get<any[]>(`${this.baseUrl}/${id}/fotos`);
+  }
 }

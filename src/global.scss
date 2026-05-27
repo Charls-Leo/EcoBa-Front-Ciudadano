@@ -63,12 +63,7 @@
 /* ==========================================================================
    Leaflet Map Seamless Rendering (Eliminates white flashes completely)
    ========================================================================== */
-.leaflet-container,
-.leaflet-pane,
-.leaflet-tile,
-.leaflet-tile-container,
-.leaflet-layer,
-.leaflet-zoom-animated {
+.leaflet-container {
   background: #f4f3f0 !important;
   background-color: #f4f3f0 !important;
 }
