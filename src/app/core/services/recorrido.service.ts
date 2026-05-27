@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, of, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { Recorrido } from '../models';
 import { AuthService } from './auth.service';
@@ -17,34 +17,78 @@ export class RecorridoService {
 
   private readonly baseUrl = `${environment.API_BASE_URL}/recorridos`;
 
+  // ═══ ESTRATEGIA DE CACHING ═══
+  private conductorRecorridosCache: Recorrido[] | null = null;
+  private allRecorridosCache: Recorrido[] | null = null;
+  private lastFetchTimeConductor = 0;
+  private lastFetchTimeAll = 0;
+  private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutos de TTL
+
   constructor(
     private http: HttpClient,
     private authService: AuthService
   ) { }
 
-  /** Obtiene recorridos asignados al conductor logueado */
-  getRecorridosConductor(): Observable<Recorrido[]> {
+  /** Obtiene recorridos asignados al conductor logueado con caché */
+  getRecorridosConductor(forceRefresh = false): Observable<Recorrido[]> {
     const usuario = this.authService.getUser();
     if (!usuario) {
       return new Observable(subscriber => {
         subscriber.error('No hay usuario logueado');
       });
     }
-    return this.http.get<Recorrido[]>(`${this.baseUrl}/conductor/${usuario.id_usuario}`);
+
+    const now = Date.now();
+    if (!forceRefresh && this.conductorRecorridosCache && (now - this.lastFetchTimeConductor < this.CACHE_DURATION)) {
+      console.log('📦 [RecorridoService] Devolviendo recorridos del conductor desde caché local');
+      return of(this.conductorRecorridosCache);
+    }
+
+    return this.http.get<Recorrido[]>(`${this.baseUrl}/conductor/${usuario.id_usuario}`).pipe(
+      tap(data => {
+        this.conductorRecorridosCache = data;
+        this.lastFetchTimeConductor = now;
+      })
+    );
   }
 
-  getRecorridos(): Observable<Recorrido[]> {
-    return this.http.get<Recorrido[]>(this.baseUrl);
+  /** Obtiene todos los recorridos con caché */
+  getRecorridos(forceRefresh = false): Observable<Recorrido[]> {
+    const now = Date.now();
+    if (!forceRefresh && this.allRecorridosCache && (now - this.lastFetchTimeAll < this.CACHE_DURATION)) {
+      console.log('📦 [RecorridoService] Devolviendo todos los recorridos desde caché local');
+      return of(this.allRecorridosCache);
+    }
+
+    return this.http.get<Recorrido[]>(this.baseUrl).pipe(
+      tap(data => {
+        this.allRecorridosCache = data;
+        this.lastFetchTimeAll = now;
+      })
+    );
   }
 
-  /** Activa un recorrido en la base de datos */
+  /** Activa un recorrido en la base de datos y limpia la caché */
   activarRecorrido(id: string | number): Observable<any> {
-    return this.http.post(`${this.baseUrl}/${id}/activar`, {});
+    return this.http.post(`${this.baseUrl}/${id}/activar`, {}).pipe(
+      tap(() => this.clearCache())
+    );
   }
 
-  /** Finaliza un recorrido en la base de datos */
+  /** Finaliza un recorrido en la base de datos y limpia la caché */
   finalizarRecorrido(id: string | number): Observable<any> {
-    return this.http.post(`${this.baseUrl}/${id}/finalizar`, {});
+    return this.http.post(`${this.baseUrl}/${id}/finalizar`, {}).pipe(
+      tap(() => this.clearCache())
+    );
+  }
+
+  /** Limpia el cache de recorridos manualmente */
+  clearCache(): void {
+    this.conductorRecorridosCache = null;
+    this.allRecorridosCache = null;
+    this.lastFetchTimeConductor = 0;
+    this.lastFetchTimeAll = 0;
+    console.log('📦 [RecorridoService] Caché de recorridos invalidado por acción mutadora');
   }
 
   // ═══════════════════════════════════════════
