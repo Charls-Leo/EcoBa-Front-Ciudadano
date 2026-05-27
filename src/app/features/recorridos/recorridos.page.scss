@@ -30,6 +30,10 @@ ion-content.section-content {
   display: flex;
   align-items: center;
   gap: 14px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.03);
 }
 
 .back-btn {

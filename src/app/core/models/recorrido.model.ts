@@ -22,13 +22,19 @@ export interface PosicionResponse {
   success?: boolean;
   message?: string;
   data?: {
-    id: string;
+    id?: string;
+    id_posicion?: string;
+    id_posiciones?: string;
+    posicion_id?: string;
     recorrido_id: string;
     lat: number;
     lon: number;
     perfil_id: string;
   };
   id?: string;
+  id_posicion?: string;
+  id_posiciones?: string;
+  posicion_id?: string;
 }
 
 /** Respuesta al subir una imagen a una posición */

@@ -5,12 +5,15 @@
   right: 0;
   background: var(--white, #ffffff);
   border-top: 1px solid rgba(0, 0, 0, 0.05);
-  padding: 10px 10px 20px;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-around;
   z-index: 1000;
-  padding-bottom: env(safe-area-inset-bottom, 20px);
+  
+  /* Modern dynamic height based on safe area */
+  height: calc(65px + env(safe-area-inset-bottom, 0px));
+  padding: 0 10px env(safe-area-inset-bottom, 0px);
+  box-sizing: border-box;
 }
 
 .nav-item {
@@ -58,11 +61,12 @@
 
 @media (max-width: 480px) {
   .bottom-nav {
-    padding: 10px 6px 18px;
-    padding-bottom: env(safe-area-inset-bottom, 18px);
+    height: 54px;
+    padding: 0 6px 2px;
   }
 
   .nav-item {
-    padding: 6px 10px;
+    padding: 2px 10px;
   }
 }
+

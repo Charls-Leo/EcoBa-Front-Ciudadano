@@ -35,3 +35,28 @@
 /* @import "@ionic/angular/css/palettes/dark.always.css"; */
 /* @import "@ionic/angular/css/palettes/dark.class.css"; */
 @import '@ionic/angular/css/palettes/dark.system.css';
+
+/* ==========================================================================
+   Safe Area Adjustments (Fixes notch and navigation bar overlap)
+   ========================================================================== */
+
+/* Top Headers padding-top adjustments */
+.top-bar,
+.section-header-bar {
+  padding-top: calc(18px + env(safe-area-inset-top, 0px)) !important;
+}
+
+.login-header {
+  padding-top: calc(26px + env(safe-area-inset-top, 0px)) !important;
+}
+
+@media (max-width: 480px) {
+  .top-bar,
+  .section-header-bar {
+    padding-top: calc(16px + env(safe-area-inset-top, 0px)) !important;
+  }
+  .login-header {
+    padding-top: calc(20px + env(safe-area-inset-top, 0px)) !important;
+  }
+}
+
