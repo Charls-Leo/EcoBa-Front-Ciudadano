@@ -9,6 +9,8 @@
   --text-dark: #1a2e22;
   --text-mid: #4a7060;
   --text-light: #8aab97;
+  --orange: #f9a03f;
+  --blue: #4ac2e8;
 }
 
 :host-context(.dark-theme) {
@@ -20,12 +22,12 @@
   --text-light: #83a191;
 }
 
-ion-content.section-content {
+ion-content.calendar-content {
   --background: var(--gray-bg);
   font-family: 'Nunito', sans-serif;
 }
 
-.section-page {
+.calendar-page {
   min-height: 100vh;
   background: var(--gray-bg);
   display: flex;
@@ -71,14 +73,14 @@ ion-content.section-content {
 }
 
 .header-title {
+  color: var(--text-dark);
   font-size: 17px;
   font-weight: 800;
-  color: var(--text-dark);
 }
 
 .header-subtitle {
-  font-size: 12px;
   color: var(--text-light);
+  font-size: 12px;
   margin-top: 2px;
   font-weight: 500;
 }
@@ -93,67 +95,44 @@ ion-content.section-content {
   padding: 16px 16px 120px;
 }
 
-.help-hero,
-.faq-card,
-.tip-item,
-.contact-card {
+.calendar-summary {
+  display: grid;
+  gap: 10px;
+}
+
+.summary-card {
   background: var(--white);
   border-radius: 16px;
+  padding: 16px;
+  border-left: 5px solid var(--green-primary);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
-.help-hero {
-  padding: 18px;
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
-}
-
-.help-icon-wrap {
-  width: 52px;
-  height: 52px;
-  border-radius: 16px;
-  background: var(--green-light);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.help-icon-wrap svg,
-.tip-item svg {
-  fill: none;
-  stroke: var(--green-primary);
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.help-icon-wrap svg {
-  width: 28px;
-  height: 28px;
-}
-
-.help-hero h1,
-.faq-card h2 {
-  margin: 0;
-  color: var(--text-dark);
-  font-weight: 800;
-}
-
-.help-hero h1 {
-  font-size: 19px;
-}
-
-.help-hero p,
-.faq-card p {
-  margin: 5px 0 0;
+.summary-card span {
+  display: block;
   color: var(--text-light);
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  margin-bottom: 5px;
 }
 
-.help-section {
+.summary-card strong {
+  color: var(--text-dark);
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.summary-card.recycling {
+  border-left-color: var(--blue);
+}
+
+.summary-card.special {
+  border-left-color: var(--orange);
+}
+
+.calendar-section {
   margin-top: 22px;
 }
 
@@ -164,73 +143,89 @@ ion-content.section-content {
   margin-bottom: 12px;
 }
 
-.faq-card {
-  padding: 15px;
-  margin-bottom: 10px;
-}
-
-.faq-card h2 {
-  font-size: 14px;
-}
-
-.tip-list {
+.event-list,
+.reminder-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.tip-item {
+.event-card,
+.reminder-item {
+  background: var(--white);
+  border-radius: 16px;
   padding: 14px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
-.tip-item svg {
-  width: 22px;
-  height: 22px;
+.date-pill {
+  width: 52px;
+  height: 58px;
+  border-radius: 14px;
+  background: var(--green-light);
+  color: var(--green-dark);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
 }
 
-.tip-item span {
-  color: var(--text-light);
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.contact-card {
-  margin-top: 22px;
-  padding: 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-
-.contact-card span {
-  display: block;
-  color: var(--text-light);
-  font-size: 12px;
+.date-pill span {
+  font-size: 11px;
   font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
 }
 
-.contact-card strong {
-  display: block;
+.date-pill strong {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.event-card.recycling .date-pill {
+  background: #e6f6fc;
+  color: #2882a0;
+}
+
+.event-card.special .date-pill {
+  background: #fff3e8;
+  color: #c07020;
+}
+
+:host-context(.dark-theme) .event-card.recycling .date-pill {
+  background: #102d35;
+  color: #7ddcf3;
+}
+
+:host-context(.dark-theme) .event-card.special .date-pill {
+  background: #382716;
+  color: #ffc46f;
+}
+
+.event-info h2 {
   color: var(--text-dark);
-  font-size: 13px;
-  margin-top: 4px;
-  overflow-wrap: anywhere;
+  font-size: 15px;
+  font-weight: 800;
+  margin: 0 0 4px;
 }
 
-.contact-card a {
-  border-radius: 12px;
-  background: var(--green-primary);
-  color: #fff;
-  padding: 10px 14px;
-  text-decoration: none;
+.event-info p,
+.reminder-item span {
+  color: var(--text-light);
   font-size: 12px;
-  font-weight: 800;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.reminder-item svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: var(--green-primary);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
   flex-shrink: 0;
 }

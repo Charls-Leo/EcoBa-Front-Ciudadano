@@ -9,7 +9,26 @@
         <span class="top-logo-text">Eco<span>Bahía</span></span>
       </div>
 
-      <div class="citizen-chip">Ciudadano</div>
+      <button
+        class="theme-toggle"
+        type="button"
+        (click)="toggleTheme()"
+        [attr.aria-label]="themeService.isDarkMode ? 'Activar modo claro' : 'Activar modo noche'">
+        <svg *ngIf="!themeService.isDarkMode" viewBox="0 0 24 24">
+          <path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"></path>
+        </svg>
+        <svg *ngIf="themeService.isDarkMode" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="4"></circle>
+          <path d="M12 2v2"></path>
+          <path d="M12 20v2"></path>
+          <path d="m4.93 4.93 1.41 1.41"></path>
+          <path d="m17.66 17.66 1.41 1.41"></path>
+          <path d="M2 12h2"></path>
+          <path d="M20 12h2"></path>
+          <path d="m6.34 17.66-1.41 1.41"></path>
+          <path d="m19.07 4.93-1.41 1.41"></path>
+        </svg>
+      </button>
     </div>
 
     <div class="scroll-content">
@@ -78,6 +97,16 @@
                   <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z"></path>
                   <path d="M8 7h8"></path>
                   <path d="M8 11h6"></path>
+                </svg>
+
+                <svg *ngSwitchCase="'calendar'" viewBox="0 0 24 24">
+                  <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+                  <path d="M16 2v4"></path>
+                  <path d="M8 2v4"></path>
+                  <path d="M3 10h18"></path>
+                  <path d="M8 14h.01"></path>
+                  <path d="M12 14h.01"></path>
+                  <path d="M16 14h.01"></path>
                 </svg>
               </ng-container>
             </div>

@@ -1,0 +1,64 @@
+<ion-content [fullscreen]="true" class="calendar-content">
+  <div class="calendar-page">
+
+    <div class="section-header-bar">
+      <button class="back-btn" (click)="goBack()" type="button">
+        <svg viewBox="0 0 24 24">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </button>
+      <div class="header-info">
+        <div class="header-title">Calendario</div>
+        <div class="header-subtitle">Recolección ordinaria, reciclaje y residuos especiales</div>
+      </div>
+      <div class="header-spacer"></div>
+    </div>
+
+    <div class="scroll-content">
+      <section class="calendar-summary">
+        <div class="summary-card ordinary">
+          <span>Ordinaria</span>
+          <strong>{{ ordinaryDays.join(', ') }}</strong>
+        </div>
+        <div class="summary-card recycling">
+          <span>Reciclaje</span>
+          <strong>{{ recyclingDays.join(', ') }}</strong>
+        </div>
+        <div class="summary-card special">
+          <span>Especiales</span>
+          <strong>{{ specialDays.join(' y ') }}</strong>
+        </div>
+      </section>
+
+      <section class="calendar-section">
+        <div class="section-title">Próximas jornadas</div>
+        <div class="event-list">
+          <article class="event-card" *ngFor="let event of upcoming" [ngClass]="event.type">
+            <div class="date-pill">
+              <span>{{ event.day }}</span>
+              <strong>{{ event.date }}</strong>
+            </div>
+            <div class="event-info">
+              <h2>{{ event.title }}</h2>
+              <p>{{ event.detail }}</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="calendar-section">
+        <div class="section-title">Recordatorios</div>
+        <div class="reminder-list">
+          <div class="reminder-item" *ngFor="let reminder of reminders">
+            <svg viewBox="0 0 24 24">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+            <span>{{ reminder }}</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+  </div>
+</ion-content>

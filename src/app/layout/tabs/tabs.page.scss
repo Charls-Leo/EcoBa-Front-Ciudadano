@@ -16,6 +16,16 @@
   box-sizing: border-box;
 }
 
+:host-context(.dark-theme) .bottom-nav {
+  background: #17221d;
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+:host-context(.dark-theme) .nav-item:hover,
+:host-context(.dark-theme) .nav-item.active {
+  background: #143326;
+}
+
 .nav-item {
   display: flex;
   flex-direction: column;

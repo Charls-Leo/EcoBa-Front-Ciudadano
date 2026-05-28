@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 import { IonApp, IonRouterOutlet } from '@ionic/angular/standalone';
 import { ConnectivityService } from './core/services/connectivity.service';
+import { ThemeService } from './core/services/theme.service';
 
 @Component({
   selector: 'app-root',
@@ -8,7 +9,10 @@ import { ConnectivityService } from './core/services/connectivity.service';
   imports: [IonApp, IonRouterOutlet],
 })
 export class AppComponent {
-  constructor(private connectivity: ConnectivityService) {
+  constructor(
+    private connectivity: ConnectivityService,
+    private themeService: ThemeService
+  ) {
     this.clearLegacyDriverState();
     // Iniciar monitoreo de red al arrancar la app
     this.connectivity.init();

@@ -15,19 +15,48 @@
     </div>
 
     <div class="scroll-content">
-      <div class="empty-state">
-        <div class="empty-icon-wrap">
+      <section class="help-hero">
+        <div class="help-icon-wrap">
           <svg viewBox="0 0 24 24">
             <circle cx="12" cy="12" r="10"></circle>
             <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
             <line x1="12" y1="17" x2="12.01" y2="17"></line>
           </svg>
         </div>
-        <div class="empty-title">Próximamente</div>
-        <div class="empty-text">
-          Aquí encontrarás respuestas a preguntas frecuentes, guías de uso y canales de contacto para soporte.
+        <div>
+          <h1>Centro de ayuda EcoBahía</h1>
+          <p>Encuentra respuestas rápidas y canales de contacto para la app ciudadana.</p>
         </div>
-      </div>
+      </section>
+
+      <section class="help-section">
+        <div class="section-title">Preguntas frecuentes</div>
+        <article class="faq-card" *ngFor="let faq of faqs">
+          <h2>{{ faq.question }}</h2>
+          <p>{{ faq.answer }}</p>
+        </article>
+      </section>
+
+      <section class="help-section">
+        <div class="section-title">Recomendaciones rápidas</div>
+        <div class="tip-list">
+          <div class="tip-item" *ngFor="let tip of quickHelp">
+            <svg viewBox="0 0 24 24">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+            <span>{{ tip }}</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="contact-card">
+        <div>
+          <span>Soporte</span>
+          <strong>{{ supportEmail }}</strong>
+        </div>
+        <a [href]="'mailto:' + supportEmail">Escribir</a>
+      </section>
     </div>
 
   </div>

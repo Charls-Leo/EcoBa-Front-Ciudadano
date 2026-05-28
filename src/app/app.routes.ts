@@ -47,6 +47,10 @@ export const routes: Routes = [
         loadComponent: () => import('./features/ayuda/ayuda.page').then(m => m.AyudaPage)
       },
       {
+        path: 'calendario',
+        loadComponent: () => import('./features/calendario/calendario.page').then(m => m.CalendarioPage)
+      },
+      {
         path: 'learn',
         loadComponent: () => import('./features/learn/learn.page').then(m => m.LearnPage)
       },
@@ -89,6 +93,11 @@ export const routes: Routes = [
   {
     path: 'ayuda',
     redirectTo: '/tabs/ayuda',
+    pathMatch: 'full'
+  },
+  {
+    path: 'calendario',
+    redirectTo: '/tabs/calendario',
     pathMatch: 'full'
   },
   {

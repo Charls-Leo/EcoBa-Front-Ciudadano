@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { IonicModule } from '@ionic/angular';
+import { ThemeService } from 'src/app/core/services/theme.service';
 
 @Component({
   selector: 'app-home',
@@ -46,6 +47,13 @@ export class HomePage {
       route: '/tabs/ayuda',
       icon: 'help',
       cardClass: 'card-teal'
+    },
+    {
+      title: 'Calendario',
+      desc: 'Fechas y recordatorios de recolección',
+      route: '/tabs/calendario',
+      icon: 'calendar',
+      cardClass: 'card-red'
     }
   ];
 
@@ -70,9 +78,16 @@ export class HomePage {
     }
   ];
 
-  constructor(private router: Router) {}
+  constructor(
+    private router: Router,
+    public themeService: ThemeService
+  ) {}
 
   goTo(route: string): void {
     this.router.navigate([route]);
+  }
+
+  toggleTheme(): void {
+    this.themeService.toggle();
   }
 }
