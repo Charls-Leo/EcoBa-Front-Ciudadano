@@ -101,6 +101,21 @@ ion-content.home-content::part(scroll) {
   align-items: center;
 }
 
+.citizen-chip {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--green-dark);
+  background: var(--green-light);
+  padding: 5px 12px;
+  border-radius: 100px;
+  letter-spacing: 0.3px;
+}
+
+:host-context(.dark-theme) .citizen-chip {
+  background: #22362d;
+  color: #b8f5d0;
+}
+
 .theme-toggle {
   width: 42px;
   height: 42px;

@@ -129,8 +129,7 @@ export class RecorridosPage implements OnInit, OnDestroy {
       inicio: '/home',
       mapa: '/mapa',
       recorridos: '/recorridos',
-      rutas: '/rutas',
-      perfil: '/perfil'
+      rutas: '/rutas'
     };
     if (routes[nav]) {
       this.router.navigate([routes[nav]]);

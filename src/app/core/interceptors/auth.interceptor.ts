@@ -3,7 +3,7 @@ import { catchError, throwError } from 'rxjs';
 
 // Mantiene compatibilidad con tokens antiguos sin obligar login en la app ciudadana.
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
-  const token = localStorage.getItem('ecobahia_driver_token');
+  const token = localStorage.getItem('ecobahia_citizen_token');
 
   const request = token
     ? req.clone({
@@ -16,9 +16,9 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   return next(request).pipe(
     catchError(error => {
       if (error.status === 401) {
-        localStorage.removeItem('ecobahia_driver_auth');
-        localStorage.removeItem('ecobahia_driver_token');
-        localStorage.removeItem('ecobahia_driver_user');
+        localStorage.removeItem('ecobahia_citizen_auth');
+        localStorage.removeItem('ecobahia_citizen_token');
+        localStorage.removeItem('ecobahia_citizen_user');
       }
 
       return throwError(() => error);

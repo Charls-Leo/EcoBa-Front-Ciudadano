@@ -147,4 +147,9 @@ export class RecorridoService {
   obtenerFotosRecorrido(id: string | number): Observable<any[]> {
     return this.http.get<any[]>(`${this.baseUrl}/${id}/fotos`);
   }
+
+  /** Obtiene todas las posiciones del recorrido en la sesión actual */
+  obtenerHistorialRecorrido(recorridoId: string | number): Observable<any> {
+    return this.http.get<any>(`${environment.API_BASE_URL}/ubicaciones/recorrido/${recorridoId}`);
+  }
 }

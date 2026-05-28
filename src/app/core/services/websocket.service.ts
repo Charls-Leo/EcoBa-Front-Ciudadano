@@ -119,7 +119,7 @@ export class WebSocketService {
     }
 
     // Leer token fresco desde localStorage
-    const freshToken = localStorage.getItem('ecobahia_driver_token');
+    const freshToken = localStorage.getItem('ecobahia_citizen_token');
     if (!freshToken) {
       console.warn('[WebSocketService] No hay token en localStorage — no se puede reconectar');
       return;

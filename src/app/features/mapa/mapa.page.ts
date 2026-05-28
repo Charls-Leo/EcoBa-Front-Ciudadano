@@ -93,21 +93,30 @@ export class MapaPage implements OnDestroy, OnInit {
     this.route.queryParams
       .pipe(takeUntil(this.destroy$))
       .subscribe(params => {
-        if (this.trackingState.recorridoActivo) {
-          // Si hay tracking activo, forzar a la ruta oficial del tracking
-          this.selectedRutaId = this.trackingState.rutaActiva || null;
+        const rutaId = params['ruta_id'];
+        const recorridoId = params['recorrido_id'];
+        const placa = params['placa'];
+        const nombreRuta = params['nombre_ruta'];
+
+        if (recorridoId) {
+          // Si nos pasan un recorrido activo, inicializar el estado del tracking
+          this.trackingState.setRecorrido(recorridoId, rutaId, placa, nombreRuta);
+          this.selectedRutaId = rutaId;
         } else {
-          // Si no, usar params, o si no hay, la ruta que esté siendo trackeada actualmente
-          this.selectedRutaId = params['ruta_id'] || this.trackingState.rutaActiva || null;
+          // Si no hay recorrido activo, limpiar el estado del tracking
+          this.trackingState.clear();
+          this.selectedRutaId = rutaId || null;
         }
         this.cargarRutas();
       });
 
     // Escuchar si el recorrido se detiene globalmente para limpiar el mapa al instante
+    let lastActiveRecorridoId = this.trackingState.recorridoActivo;
     this.trackingState.recorridoId$
       .pipe(takeUntil(this.destroy$))
       .subscribe(id => {
-        if (!id) {
+        // Solo limpiar el mapa si realmente pasó de estar activo a detenerse/finalizar
+        if (!id && lastActiveRecorridoId) {
           this.selectedRutaId = null;
           if (this.map) {
             this.rutasLayer.clearLayers();
@@ -122,6 +131,7 @@ export class MapaPage implements OnDestroy, OnInit {
             });
           }
         }
+        lastActiveRecorridoId = id;
       });
 
     // Escuchar fotos en tiempo real tomadas por este conductor
@@ -143,11 +153,31 @@ export class MapaPage implements OnDestroy, OnInit {
           );
         }
       });
+
+    // Escuchar si el recorrido es finalizado por el conductor
+    this.webSocketService.messages$
+      .pipe(
+        takeUntil(this.destroy$),
+        filter(msg => msg.event === 'recorrido:finalizado')
+      )
+      .subscribe((msg: any) => {
+        const data = msg.data;
+        if (data && String(data.recorrido_id) === String(this.trackingState.recorridoActivo)) {
+          console.log('[MAPA] 🏁 Recorrido finalizado recibido por WebSocket:', data);
+          this.trackingState.clear();
+          this.lastLocation = null;
+        }
+      });
   }
 
   ionViewDidEnter() {
     console.log('[MAPA] ionViewDidEnter — map exists?', !!this.map);
     this.mapReady = false;
+
+    const token = this.authService.getToken();
+    if (token) {
+      this.webSocketService.connect(token);
+    }
 
     if (!this.map) {
       this.initMap();
@@ -195,6 +225,7 @@ export class MapaPage implements OnDestroy, OnInit {
 
   ionViewWillLeave() {
     this.mapReady = false;
+    this.webSocketService.disconnect();
   }
 
   ngOnDestroy() {
@@ -206,6 +237,7 @@ export class MapaPage implements OnDestroy, OnInit {
       this.map.remove();
       this.map = undefined;
     }
+    this.webSocketService.disconnect();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -481,17 +513,71 @@ export class MapaPage implements OnDestroy, OnInit {
   }
 
   escucharUbicacionEnTiempoReal() {
-    this.locationService.location$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(loc => {
-        if (!this.map) return;
+    // Escuchar la ubicación en tiempo real del conductor vía WebSocket
+    this.webSocketService.messages$
+      .pipe(
+        takeUntil(this.destroy$),
+        filter(msg => msg.event === 'location:update')
+      )
+      .subscribe((msg: any) => {
+        const data = msg.data;
+        // Solo procesar si coincide con el recorrido activo que estamos visualizando
+        if (data && data.recorrido_id && String(data.recorrido_id) === String(this.trackingState.recorridoActivo)) {
+          console.log('[MAPA] 📍 Ubicación de conductor recibida por WebSocket:', data);
+          
+          // Actualizar progreso si viene en el mensaje
+          if (data.porcentaje_progreso !== undefined) {
+            this.trackingState.setProgreso(data.porcentaje_progreso);
+          }
 
-        if (!this.mapReady) {
-          this.pendingLocation = loc;
-          return;
+          if (data.location) {
+            const loc: LocationData = {
+              latitude: Number(data.location.latitude),
+              longitude: Number(data.location.longitude),
+              timestamp: Number(data.location.timestamp),
+              accuracy: Number(data.location.accuracy || 0),
+              speed: Number(data.location.speed || 0),
+              heading: Number(data.location.heading || 0)
+            };
+
+            if (!this.mapReady) {
+              this.pendingLocation = loc;
+              return;
+            }
+
+            this.procesarUbicacionEnTiempoReal(loc);
+          }
         }
+      });
+  }
 
-        this.procesarUbicacionEnTiempoReal(loc);
+  private cargarHistorialRecorrido(recorridoId: string | number) {
+    this.recorridoService.obtenerHistorialRecorrido(recorridoId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (res: any) => {
+          const posiciones = res?.data || res || [];
+          if (posiciones.length > 0) {
+            const ultimaPos = posiciones[posiciones.length - 1];
+            console.log('[MAPA] 📍 Posición inicial del conductor cargada:', ultimaPos);
+            
+            const loc: LocationData = {
+              latitude: Number(ultimaPos.lat),
+              longitude: Number(ultimaPos.lon),
+              timestamp: new Date(ultimaPos.capturado_ts).getTime(),
+              accuracy: 0,
+              speed: 0,
+              heading: Number(ultimaPos.heading || 0)
+            };
+
+            if (this.mapReady) {
+              this.procesarUbicacionEnTiempoReal(loc);
+            } else {
+              this.pendingLocation = loc;
+            }
+          }
+        },
+        error: (err) => console.error('[MAPA] Error al cargar historial de recorrido:', err)
       });
   }
 
@@ -570,68 +656,10 @@ export class MapaPage implements OnDestroy, OnInit {
   // Ruta de Acercamiento Automática (OSRM)
   // ═══════════════════════════════════════════
   private async verificarRutaDeAcercamiento() {
-    if (!this.map || !this.lastLocation || !this.startPointCoords || !this.trackingState.recorridoActivo) {
-      if (this.approachRouteLayer) {
-        this.approachRouteLayer.remove();
-        this.approachRouteLayer = null;
-      }
-      return;
-    }
-
-    // Distancia directa desde el camión hasta el punto de inicio de la ruta oficial
-    const distToStart = this.map.distance(
-      L.latLng(this.lastLocation.lat, this.lastLocation.lng), 
-      L.latLng(this.startPointCoords.lat, this.startPointCoords.lng)
-    );
-
-    // Si está en la ruta oficial o muy cerca del punto de inicio
-    if (this.isEnRuta || distToStart < 100) {
-      if (this.approachRouteLayer) {
-        this.approachRouteLayer.remove();
-        this.approachRouteLayer = null;
-      }
-      return;
-    }
-
-    // Para no saturar OSRM y la red, calculamos la ruta cada 15 segundos máximo
-    const now = Date.now();
-    if (now - this.lastApproachUpdate < 15000 || this.isFetchingApproachRoute) return;
-
-    this.isFetchingApproachRoute = true;
-    this.lastApproachUpdate = now;
-
-    try {
-      const lon1 = this.lastLocation.lng;
-      const lat1 = this.lastLocation.lat;
-      const lon2 = this.startPointCoords.lng;
-      const lat2 = this.startPointCoords.lat;
-
-      const url = `https://router.project-osrm.org/route/v1/driving/${lon1},${lat1};${lon2},${lat2}?overview=full&geometries=geojson`;
-      const response = await fetch(url);
-      const data = await response.json();
-
-      if (data && data.routes && data.routes.length > 0) {
-        const coords = data.routes[0].geometry.coordinates; // [lon, lat]
-        const latlngs = coords.map((c: [number, number]) => L.latLng(c[1], c[0]));
-
-        if (this.approachRouteLayer) {
-          this.approachRouteLayer.remove();
-        }
-
-        // Dibujar ruta de acercamiento en color naranja punteado para diferenciarla
-        this.approachRouteLayer = L.polyline(latlngs, {
-          color: '#f59e0b', // Naranja/Ambar
-          weight: 6,
-          opacity: 0.8,
-          dashArray: '10, 10',
-          lineCap: 'round',
-          lineJoin: 'round'
-        }).addTo(this.map);
-      }
-    } catch (err) {
-      console.error('Error calculando ruta de acercamiento con OSRM:', err);
-    } finally {
-      this.isFetchingApproachRoute = false;
+    // Deshabilitado en la app de ciudadano (camino naranja de acercamiento exclusivo de conductores)
+    if (this.approachRouteLayer) {
+      this.approachRouteLayer.remove();
+      this.approachRouteLayer = null;
     }
   }
 
@@ -641,7 +669,11 @@ export class MapaPage implements OnDestroy, OnInit {
       .subscribe({
         next: (data) => {
           this.rutas = Array.isArray(data) ? data : [];
-          this.dibujarRutas();
+          if (this.mapReady) {
+            this.dibujarRutas();
+          }
+          // Si el mapa aún no está listo, el ionViewDidEnter llama
+          // dibujarRutas() después del timeout — la ruta se dibuja sola
         },
         error: (err) => console.error('Error al cargar rutas', err)
       });
@@ -681,6 +713,8 @@ export class MapaPage implements OnDestroy, OnInit {
           },
           error: (err) => console.error('[MAPA] Error al cargar fotos del recorrido:', err)
         });
+
+      this.cargarHistorialRecorrido(recorridoId);
     }
 
     if (this.approachRouteLayer) {
@@ -804,15 +838,21 @@ export class MapaPage implements OnDestroy, OnInit {
 
     if (this.rutasLayer.getLayers().length > 0) {
       if (this.mapReady) {
-        const bounds = this.rutasLayer.getBounds();
-        if (bounds.isValid()) {
-          const center = bounds.getCenter();
-          console.log('[MAPA] dibujarRutas — panTo centro ruta:', center.lat, center.lng);
-
-          // animate: false evita que Leaflet dispare viewreset al final de la animación CSS,
-          // que borraría todos los tiles y causaría el mapa en blanco.
-          this.map!.panTo(center, { animate: false });
-          console.log('[MAPA] dibujarRutas — panTo completado');
+        const isTracking = !!this.trackingState.recorridoActivo;
+        
+        if (isTracking && this.truckMarker) {
+          const truckLatLng = this.truckMarker.getLatLng();
+          console.log('[MAPA] dibujarRutas — enfocar en la ubicación actual del conductor:', truckLatLng);
+          this.map!.setView(truckLatLng, 16, { animate: false });
+        } else if (isTracking && this.pendingLocation) {
+          const pendingLatLng = L.latLng(this.pendingLocation.latitude, this.pendingLocation.longitude);
+          console.log('[MAPA] dibujarRutas — enfocar en la ubicación pendiente del conductor:', pendingLatLng);
+          this.map!.setView(pendingLatLng, 16, { animate: false });
+        } else if (this.startPointCoords) {
+          const sp = this.startPointCoords as {lat: number, lng: number};
+          const startLatLng: [number, number] = [sp.lat, sp.lng];
+          console.log('[MAPA] dibujarRutas — enfocar al inicio de ruta:', startLatLng);
+          this.map!.setView(startLatLng, 15, { animate: false });
         }
       }
     } else {

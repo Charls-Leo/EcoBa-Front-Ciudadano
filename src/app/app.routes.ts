@@ -86,11 +86,6 @@ export const routes: Routes = [
     pathMatch: 'full'
   },
   {
-    path: 'perfil',
-    redirectTo: '/tabs/home',
-    pathMatch: 'full'
-  },
-  {
     path: 'ayuda',
     redirectTo: '/tabs/ayuda',
     pathMatch: 'full'

@@ -14,13 +14,27 @@ import { Usuario, LoginResponse, RegisterRequest, RegisterResponse } from '../mo
   providedIn: 'root'
 })
 export class AuthService {
-  private readonly STORAGE_KEY = 'ecobahia_driver_auth';
-  private readonly USER_KEY = 'ecobahia_driver_user';
-  private readonly TOKEN_KEY = 'ecobahia_driver_token';
+  private readonly STORAGE_KEY = 'ecobahia_citizen_auth';
+  private readonly USER_KEY = 'ecobahia_citizen_user';
+  private readonly TOKEN_KEY = 'ecobahia_citizen_token';
 
   private apiUrl = `${environment.API_BASE_URL}/usuarios`;
 
   constructor(private http: HttpClient) {}
+
+  /**
+   * Genera una sesión anónima automática con el backend para el ciudadano
+   */
+  generarSesionAnonima(): Observable<any> {
+    return this.http.post<any>(`${this.apiUrl}/sesion-anonima`, {})
+      .pipe(
+        tap(response => {
+          if (response.ok) {
+            this.guardarSesion(response.token, response.usuario);
+          }
+        })
+      );
+  }
 
   /**
    * Login real contra el backend - solo conductores (id_rol=2)
